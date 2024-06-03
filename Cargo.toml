@@ -1,6 +1,4 @@
 [workspace]
 
-members = [
-  "rust-control-plane",
-  "data-plane-api",
-]
+members = [ "rust-control-plane", "data-plane-api", "test-xds" ]
+resolver = "2"
