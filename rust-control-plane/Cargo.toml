@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+data-plane-api = { version = "0.1.0", path = "../data-plane-api" }
+prost = "0.12.6"
+tokio = {  version = "1.38.0", features = ["full"] }
+tokio-stream = "0.1.15"
+tonic = "0.11.0"
+sha2 = "0.11.0-pre.3"
+async-trait = "0.1.80"
+slab = "0.4.9"
+tracing = "0.1.40"
+futures = "0.3.30"
