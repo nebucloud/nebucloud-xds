@@ -7,3 +7,6 @@
 [submodule "data-plane-api/googleapis"]
 	path = data-plane-api/googleapis
 	url = https://github.com/googleapis/googleapis.git
+[submodule "data-plane-api/protoc-gen-validate"]
+	path = data-plane-api/protoc-gen-validate
+	url = https://github.com/bufbuild/protoc-gen-validate.git
