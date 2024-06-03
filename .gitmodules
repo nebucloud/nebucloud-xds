@@ -4,3 +4,6 @@
 [submodule "data-plane-api/xds"]
 	path = data-plane-api/xds
 	url = https://github.com/cncf/xds.git
+[submodule "data-plane-api/googleapis"]
+	path = data-plane-api/googleapis
+	url = https://github.com/googleapis/googleapis.git
