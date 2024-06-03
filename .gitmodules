@@ -10,3 +10,12 @@
 [submodule "data-plane-api/protoc-gen-validate"]
 	path = data-plane-api/protoc-gen-validate
 	url = https://github.com/bufbuild/protoc-gen-validate.git
+[submodule "data-plane-api/opencensus-proto"]
+	path = data-plane-api/opencensus-proto
+	url = https://github.com/census-instrumentation/opencensus-proto.git
+[submodule "data-plane-api/opentelemetry-proto"]
+	path = data-plane-api/opentelemetry-proto
+	url = https://github.com/open-telemetry/opentelemetry-proto.git
+[submodule "data-plane-api/client_model"]
+	path = data-plane-api/client_model
+	url = https://github.com/prometheus/client_model.git
