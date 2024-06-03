@@ -1,3 +1,6 @@
 [submodule "data-plane-api/data-plane-api"]
 	path = data-plane-api/data-plane-api
 	url = https://github.com/envoyproxy/data-plane-api.git
+[submodule "data-plane-api/xds"]
+	path = data-plane-api/xds
+	url = https://github.com/cncf/xds.git
