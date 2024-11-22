@@ -1,10 +1,11 @@
 use crate::model::{parse_clusters, sort_clusters, Cluster, Endpoint};
 use pretty_assertions::Comparison;
+use std::collections::HashSet;
 use std::fmt;
 use std::future::Future;
 use std::io;
 use std::process::{Child, Command, Stdio};
-use tokio::time::{Duration, Instant};
+use tokio::time::{sleep, Duration, Instant};
 
 pub enum PollError {
     Reqwest(reqwest::Error),
@@ -144,6 +145,44 @@ impl EnvoyProcess {
             // Handle the case where the child process doesn't exist
             // You might log a message, return an error, or do nothing
             Ok(()) // Or Err(io::Error::new(io::ErrorKind::Other, "Envoy process not running"))
+        }
+    }
+
+    pub async fn wait_for_fetch(&mut self, expected_clusters: HashSet<String>) {
+        // Create a Reqwest client
+        let client = reqwest::Client::new();
+        let start = Instant::now();
+
+        // Start polling the admin endpoint
+        loop {
+            let response = client.get(CLUSTERS_URL).send().await;
+            match response {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        let body = response.text().await.unwrap();
+                        let clusters = parse_clusters(&body);
+                        let cluster_names: HashSet<String> =
+                            clusters.iter().map(|c| c.name.clone()).collect();
+
+                        if cluster_names == expected_clusters {
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Handle errors, e.g., print an error message
+                    println!("Error fetching clusters: {:?}", e);
+                }
+            }
+
+            // Add a timeout to prevent infinite looping
+            if Instant::now().duration_since(start) > Duration::from_secs(10) {
+                // Example timeout: 10 seconds
+                panic!("Timeout waiting for Envoy fetch");
+            }
+
+            // Wait for a short period before trying again
+            sleep(Duration::from_millis(100)).await;
         }
     }
 }
