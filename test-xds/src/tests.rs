@@ -5,3 +5,4 @@ pub mod test4;
 pub mod test5;
 pub mod test6;
 pub mod test7;
+pub mod stress_test;

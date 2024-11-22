@@ -69,6 +69,7 @@ impl EnvoyProcess {
 
     fn command(&self) -> Command {
         let mut cmd = Command::new("envoy");
+
         cmd.args([
             "-c",
             &self.config_path,
@@ -78,7 +79,10 @@ impl EnvoyProcess {
             &self.service_cluster,
         ])
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
+
+        println!("Envoy command: {:?}", cmd);
+
         cmd
     }
 

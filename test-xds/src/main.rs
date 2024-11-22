@@ -28,6 +28,13 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
+
+    // Run stress_test if the name is "stress"
+    if args.name.as_str() == "stress" {
+        tests::stress_test::stress_test().await;
+        return;
+    }
+
     match args.name.as_str() {
         "test1" => {
             let mut test1 = Test::new(tests::test1::init(), args.ads).await;
