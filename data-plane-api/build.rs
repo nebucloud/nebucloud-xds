@@ -14,7 +14,7 @@ fn main() -> io::Result<()> {
         .build_client(true)
         .compile_well_known_types(true)
         .include_file("mod.rs")
-        .compile_with_config(
+        .compile_protos_with_config(
             config,
             &protos,
             &[
