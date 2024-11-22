@@ -21,12 +21,26 @@ pub async fn handle_stream<C: Cache>(
     cache: Arc<C>,
 ) {
     let mut stream = Stream::new(responses, type_url, cache);
+
     loop {
         tokio::select! {
             maybe_req = requests.next() => {
-                let req = maybe_req.unwrap().unwrap();
-                let span = stream.build_client_request_span(&req);
-                stream.handle_client_request(req).instrument(span).await;
+                match maybe_req {
+                    Some(Ok(req)) => {
+                        let span = stream.build_client_request_span(&req);
+                        stream.handle_client_request(req).instrument(span).await;
+                    }
+                    Some(Err(err)) => {
+                        // Handle the error (e.g., log it)
+                        eprintln!("Error receiving request: {}", err);
+                        // You might want to break the loop or continue
+                        break; // Example: break the loop on error
+                    }
+                    None => {
+                        // The stream has ended
+                        break;
+                    }
+                }
             }
             Some(rep) = stream.watches_rx.recv() => {
                 stream.handle_watch_response(rep)
