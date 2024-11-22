@@ -53,9 +53,17 @@ impl EnvoyProcess {
     }
 
     pub fn spawn(&mut self) -> io::Result<()> {
-        let child = self.command().spawn()?;
-        self.child = Some(child);
-        Ok(())
+        match self.command().spawn() {
+            Ok(child) => {
+                self.child = Some(child);
+                Ok(())
+            }
+            Err(err) => {
+                // Handle the error (e.g., log it)
+                eprintln!("Error spawning Envoy process: {}", err);
+                Err(err)
+            }
+        }
     }
 
     fn command(&self) -> Command {
@@ -68,8 +76,8 @@ impl EnvoyProcess {
             "--service-cluster",
             &self.service_cluster,
         ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
         cmd
     }
 
@@ -78,7 +86,7 @@ impl EnvoyProcess {
             get_clusters().await.map_err(PollError::Reqwest)?;
             Ok(())
         })
-            .await
+        .await
     }
 
     pub async fn poll_until_eq(&self, mut expected: Vec<Cluster>) -> Result<(), PollError> {
@@ -103,13 +111,13 @@ impl EnvoyProcess {
                 Err(PollError::ClustersNotEqual(clusters, expected.clone()))
             }
         })
-            .await
+        .await
     }
 
     pub async fn poll_until<T, F, Fut, E>(&self, mut f: F) -> Result<T, E>
-        where
-            F: FnMut() -> Fut,
-            Fut: Future<Output = Result<T, E>>,
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<T, E>>,
     {
         let start = Instant::now();
         let mut failed_attempts = 0;
@@ -130,7 +138,13 @@ impl EnvoyProcess {
     }
 
     pub fn kill(&mut self) -> io::Result<()> {
-        self.child.as_mut().unwrap().kill()
+        if let Some(child) = self.child.as_mut() {
+            child.kill()
+        } else {
+            // Handle the case where the child process doesn't exist
+            // You might log a message, return an error, or do nothing
+            Ok(()) // Or Err(io::Error::new(io::ErrorKind::Other, "Envoy process not running"))
+        }
     }
 }
 
