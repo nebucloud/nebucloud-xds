@@ -49,6 +49,10 @@ async fn main() {
             let mut test5 = Test::new(tests::test5::init(), args.ads).await;
             test5.run(tests::test5::test, args.ads, args.delta).await;
         }
+        "test6" => {
+            let mut test6 = Test::new(tests::test6::init(), args.ads).await;
+            test6.run(tests::test6::test, args.ads, args.delta).await;
+        }
         _ => tracing::error!("Unknown test name {}", args.name),
     }
 }
