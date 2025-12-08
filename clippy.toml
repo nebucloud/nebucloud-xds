@@ -1,0 +1,17 @@
+# Clippy configuration
+# https://rust-lang.github.io/rust-clippy/master/index.html
+
+# Maximum cognitive complexity before triggering the lint
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function before triggering the lint
+too-many-lines-threshold = 100
+
+# Maximum number of arguments a function can take
+too-many-arguments-threshold = 7
+
+# Allowed names for variables
+allowed-idents-below-min-chars = ["id", "tx", "rx", "ok", "db"]
+
+# MSRV
+msrv = "1.75"

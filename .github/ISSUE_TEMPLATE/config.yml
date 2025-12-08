@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/nebucloud/nebucloud-xds/discussions
+    about: Ask questions and discuss ideas
+  - name: xDS Protocol Documentation
+    url: https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol
+    about: Official Envoy xDS protocol documentation

@@ -1,0 +1,14 @@
+[package]
+name = "simple-server-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+nebucloud-xds = { path = "../../crates/nebucloud-xds" }
+xds-types = { path = "../../crates/xds-types" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
