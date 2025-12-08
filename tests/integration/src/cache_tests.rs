@@ -1,5 +1,7 @@
 //! Cache integration tests.
 
+#![allow(unused_imports)] // Some imports used conditionally
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,7 +15,7 @@ fn cache_basic_operations() {
     // Set a snapshot
     let snapshot = Snapshot::builder()
         .version("v1")
-        .resources(TypeUrl::Cluster, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
         .build();
 
     cache.set_snapshot(node, snapshot);
@@ -21,7 +23,7 @@ fn cache_basic_operations() {
     // Get the snapshot
     let retrieved = cache.get_snapshot(node).expect("snapshot should exist");
     assert_eq!(retrieved.version(), "v1");
-    assert!(retrieved.contains_type(TypeUrl::Cluster));
+    assert!(retrieved.contains_type(TypeUrl::CLUSTER.into()));
 }
 
 #[test]
@@ -32,9 +34,7 @@ fn cache_multiple_nodes() {
     let nodes = ["node-1", "node-2", "node-3"];
     for (i, node_id) in nodes.iter().enumerate() {
         let node = NodeHash::from_id(node_id);
-        let snapshot = Snapshot::builder()
-            .version(format!("v{}", i + 1))
-            .build();
+        let snapshot = Snapshot::builder().version(format!("v{}", i + 1)).build();
         cache.set_snapshot(node, snapshot);
     }
 
@@ -149,9 +149,7 @@ fn cache_concurrent_access() {
             let node = NodeHash::from_id(&format!("node-{}", i));
 
             for j in 0..100 {
-                let snapshot = Snapshot::builder()
-                    .version(format!("v{}", j))
-                    .build();
+                let snapshot = Snapshot::builder().version(format!("v{}", j)).build();
                 cache_clone.set_snapshot(node, snapshot);
                 cache_clone.get_snapshot(node);
             }

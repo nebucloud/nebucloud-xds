@@ -33,8 +33,7 @@ impl TypeUrl {
     pub const LISTENER: &'static str = "type.googleapis.com/envoy.config.listener.v3.Listener";
 
     /// Type URL for RouteConfiguration (RDS).
-    pub const ROUTE: &'static str =
-        "type.googleapis.com/envoy.config.route.v3.RouteConfiguration";
+    pub const ROUTE: &'static str = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration";
 
     /// Type URL for Secret (SDS).
     pub const SECRET: &'static str =
@@ -48,8 +47,7 @@ impl TypeUrl {
         "type.googleapis.com/envoy.config.route.v3.ScopedRouteConfiguration";
 
     /// Type URL for VirtualHost (VHDS).
-    pub const VIRTUAL_HOST: &'static str =
-        "type.googleapis.com/envoy.config.route.v3.VirtualHost";
+    pub const VIRTUAL_HOST: &'static str = "type.googleapis.com/envoy.config.route.v3.VirtualHost";
 
     /// Type URL for ExtensionConfig (ECDS).
     pub const EXTENSION_CONFIG: &'static str =
@@ -73,7 +71,11 @@ impl TypeUrl {
     /// returns `Cluster`.
     #[must_use]
     pub fn short_name(&self) -> &str {
-        self.0.rsplit('/').next().and_then(|s| s.rsplit('.').next()).unwrap_or(&self.0)
+        self.0
+            .rsplit('/')
+            .next()
+            .and_then(|s| s.rsplit('.').next())
+            .unwrap_or(&self.0)
     }
 
     /// Check if this is a valid xDS type URL.

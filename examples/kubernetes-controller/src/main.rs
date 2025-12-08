@@ -24,9 +24,14 @@ use tracing_subscriber::FmtSubscriber;
 
 /// Kubernetes resource event.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Example code showing API surface
 enum KubeEvent {
     /// Service added or updated.
-    ServiceUpsert { name: String, namespace: String, ports: Vec<u32> },
+    ServiceUpsert {
+        name: String,
+        namespace: String,
+        ports: Vec<u32>,
+    },
     /// Service deleted.
     ServiceDelete { name: String, namespace: String },
     /// Endpoints updated.
@@ -50,6 +55,7 @@ struct Controller {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Example code showing API surface
 struct ServiceInfo {
     name: String,
     namespace: String,
@@ -69,7 +75,11 @@ impl Controller {
     /// Handle a Kubernetes event.
     fn handle_event(&mut self, event: KubeEvent) {
         match event {
-            KubeEvent::ServiceUpsert { name, namespace, ports } => {
+            KubeEvent::ServiceUpsert {
+                name,
+                namespace,
+                ports,
+            } => {
                 let key = format!("{}/{}", namespace, name);
                 info!(service = %key, "Service upserted");
                 self.services.insert(

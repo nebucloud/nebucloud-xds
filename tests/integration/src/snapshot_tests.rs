@@ -4,9 +4,7 @@ use nebucloud_xds::prelude::*;
 
 #[test]
 fn snapshot_builder_basic() {
-    let snapshot = Snapshot::builder()
-        .version("v1")
-        .build();
+    let snapshot = Snapshot::builder().version("v1").build();
 
     assert_eq!(snapshot.version(), "v1");
     assert!(snapshot.is_empty());
@@ -17,23 +15,23 @@ fn snapshot_builder_basic() {
 fn snapshot_builder_with_resources() {
     let snapshot = Snapshot::builder()
         .version("v2")
-        .resources(TypeUrl::Cluster, vec![])
-        .resources(TypeUrl::Listener, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
+        .resources(TypeUrl::LISTENER.into(), vec![])
         .build();
 
     assert_eq!(snapshot.version(), "v2");
-    assert!(snapshot.contains_type(TypeUrl::Cluster));
-    assert!(snapshot.contains_type(TypeUrl::Listener));
-    assert!(!snapshot.contains_type(TypeUrl::Route));
+    assert!(snapshot.contains_type(TypeUrl::CLUSTER.into()));
+    assert!(snapshot.contains_type(TypeUrl::LISTENER.into()));
+    assert!(!snapshot.contains_type(TypeUrl::ROUTE.into()));
 }
 
 #[test]
 fn snapshot_type_urls() {
     let snapshot = Snapshot::builder()
         .version("v1")
-        .resources(TypeUrl::Cluster, vec![])
-        .resources(TypeUrl::Endpoint, vec![])
-        .resources(TypeUrl::Listener, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
+        .resources(TypeUrl::ENDPOINT.into(), vec![])
+        .resources(TypeUrl::LISTENER.into(), vec![])
         .build();
 
     let type_urls: Vec<_> = snapshot.type_urls().collect();
@@ -44,21 +42,24 @@ fn snapshot_type_urls() {
 fn snapshot_version_per_type() {
     let snapshot = Snapshot::builder()
         .version("global-v1")
-        .resources(TypeUrl::Cluster, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
         .build();
 
     // Type should inherit global version
-    assert_eq!(snapshot.get_version(TypeUrl::Cluster), Some("global-v1"));
+    assert_eq!(
+        snapshot.get_version(TypeUrl::CLUSTER.into()),
+        Some("global-v1")
+    );
 
     // Missing type should return None
-    assert_eq!(snapshot.get_version(TypeUrl::Listener), None);
+    assert_eq!(snapshot.get_version(TypeUrl::LISTENER.into()), None);
 }
 
 #[test]
 fn snapshot_is_immutable() {
     let snapshot = Snapshot::builder()
         .version("v1")
-        .resources(TypeUrl::Cluster, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
         .build();
 
     // Store creation time
@@ -74,45 +75,46 @@ fn snapshot_is_immutable() {
 fn snapshot_resources_empty() {
     let snapshot = Snapshot::builder()
         .version("v1")
-        .resources(TypeUrl::Cluster, vec![])
+        .resources(TypeUrl::CLUSTER.into(), vec![])
         .build();
 
-    let resources = snapshot.get_resources(TypeUrl::Cluster).unwrap();
+    let resources = snapshot.get_resources(TypeUrl::CLUSTER.into()).unwrap();
     assert!(resources.is_empty());
     assert_eq!(resources.len(), 0);
 }
 
 #[test]
 fn type_url_display() {
+    // TypeUrl constants are &'static str
     assert_eq!(
-        TypeUrl::Cluster.as_str(),
+        TypeUrl::CLUSTER,
         "type.googleapis.com/envoy.config.cluster.v3.Cluster"
     );
     assert_eq!(
-        TypeUrl::Listener.as_str(),
+        TypeUrl::LISTENER,
         "type.googleapis.com/envoy.config.listener.v3.Listener"
     );
     assert_eq!(
-        TypeUrl::Route.as_str(),
+        TypeUrl::ROUTE,
         "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
     );
     assert_eq!(
-        TypeUrl::Endpoint.as_str(),
+        TypeUrl::ENDPOINT,
         "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
     );
 }
 
 #[test]
-fn type_url_from_str() {
+fn type_url_from_string() {
+    // TypeUrl can be created from strings using From trait
+    let cluster: TypeUrl = "type.googleapis.com/envoy.config.cluster.v3.Cluster".into();
+    assert_eq!(cluster.as_str(), TypeUrl::CLUSTER);
+
+    let listener: TypeUrl = TypeUrl::LISTENER.into();
     assert_eq!(
-        TypeUrl::from_str("type.googleapis.com/envoy.config.cluster.v3.Cluster"),
-        Some(TypeUrl::Cluster)
+        listener.as_str(),
+        "type.googleapis.com/envoy.config.listener.v3.Listener"
     );
-    assert_eq!(
-        TypeUrl::from_str("type.googleapis.com/envoy.config.listener.v3.Listener"),
-        Some(TypeUrl::Listener)
-    );
-    assert_eq!(TypeUrl::from_str("unknown"), None);
 }
 
 #[test]
@@ -129,19 +131,17 @@ fn node_hash_deterministic() {
 fn node_hash_display() {
     let hash = NodeHash::from_id("my-node");
     let display = format!("{}", hash);
-    assert!(display.starts_with("node-"));
-    assert!(display.len() > 5);
+    // NodeHash displays as 16-character hex string
+    assert_eq!(display.len(), 16);
+    assert!(display.chars().all(|c| c.is_ascii_hexdigit()));
 }
 
 #[test]
-fn resource_version_from_bytes() {
-    let data1 = b"some data";
-    let data2 = b"some data";
-    let data3 = b"different data";
-
-    let v1 = ResourceVersion::from_bytes(data1);
-    let v2 = ResourceVersion::from_bytes(data2);
-    let v3 = ResourceVersion::from_bytes(data3);
+fn resource_version_equality() {
+    // ResourceVersion equality is based on string content
+    let v1 = ResourceVersion::new("v1");
+    let v2 = ResourceVersion::new("v1");
+    let v3 = ResourceVersion::new("v2");
 
     assert_eq!(v1, v2);
     assert_ne!(v1, v3);

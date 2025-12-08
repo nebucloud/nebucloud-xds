@@ -20,7 +20,9 @@ use crate::TypeUrl;
 /// ```rust
 /// use xds_core::{Resource, TypeUrl};
 /// use prost_types::Any;
+/// use std::any::Any as StdAny;
 ///
+/// #[derive(Debug)]
 /// struct MyCluster {
 ///     name: String,
 ///     // ... other fields
@@ -41,6 +43,10 @@ use crate::TypeUrl;
 ///             type_url: self.type_url().to_string(),
 ///             value: vec![], // actual encoding would go here
 ///         })
+///     }
+///
+///     fn as_any(&self) -> &dyn StdAny {
+///         self
 ///     }
 /// }
 /// ```
@@ -72,6 +78,7 @@ pub type BoxResource = Arc<dyn Resource>;
 /// This allows storing raw protobuf Any messages as resources
 /// without needing to decode them.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Public API surface, will be used by consumers
 pub struct AnyResource {
     type_url: String,
     name: String,
@@ -79,6 +86,7 @@ pub struct AnyResource {
     any: prost_types::Any,
 }
 
+#[allow(dead_code)] // Public API surface, will be used by consumers
 impl AnyResource {
     /// Create a new AnyResource.
     #[must_use]
@@ -302,7 +310,11 @@ mod tests {
     #[test]
     fn test_registry_get() {
         let registry = ResourceRegistry::with_envoy_types();
-        let info = registry.get(TypeUrl::CLUSTER).unwrap();
+        let info = registry.get(TypeUrl::CLUSTER);
+        assert!(info.is_some(), "CLUSTER type should be registered");
+        // Safe because we just asserted it's Some
+        #[allow(clippy::unwrap_used)]
+        let info = info.unwrap();
         assert_eq!(info.short_name, "Cluster");
     }
 }

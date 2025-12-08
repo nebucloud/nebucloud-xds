@@ -122,7 +122,9 @@ impl ShardedCache {
     ///
     /// Note: This acquires read locks on all shards.
     pub fn iter(&self) -> impl Iterator<Item = (NodeHash, Arc<Snapshot>)> + '_ {
-        self.snapshots.iter().map(|r| (*r.key(), Arc::clone(r.value())))
+        self.snapshots
+            .iter()
+            .map(|r| (*r.key(), Arc::clone(r.value())))
     }
 }
 
@@ -175,11 +177,13 @@ impl Cache for ShardedCache {
 
 /// Builder for creating a configured cache.
 #[derive(Debug, Default)]
+#[allow(dead_code)] // Public API surface
 pub struct CacheBuilder {
     capacity: Option<usize>,
     watch_buffer_size: Option<usize>,
 }
 
+#[allow(dead_code)] // Public API surface
 impl CacheBuilder {
     /// Create a new cache builder.
     pub fn new() -> Self {

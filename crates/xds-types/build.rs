@@ -4,7 +4,7 @@
 //! using tonic-build and prost-build.
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(dead_code)]
-fn compile_protos(proto_dir: &PathBuf, out_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn compile_protos(proto_dir: &Path, out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // Proto files to compile
     let protos: Vec<PathBuf> = [
         "envoy/service/discovery/v3/ads.proto",
@@ -48,12 +48,7 @@ fn compile_protos(proto_dir: &PathBuf, out_dir: &PathBuf) -> Result<(), Box<dyn 
     let validate = proto_dir.join("protoc-gen-validate");
     let xds = proto_dir.join("xds");
 
-    let includes: Vec<PathBuf> = vec![
-        proto_dir.clone(),
-        googleapis,
-        validate,
-        xds,
-    ];
+    let includes: Vec<PathBuf> = vec![proto_dir.to_path_buf(), googleapis, validate, xds];
 
     // Configure tonic build
     tonic_build::configure()
@@ -65,7 +60,7 @@ fn compile_protos(proto_dir: &PathBuf, out_dir: &PathBuf) -> Result<(), Box<dyn 
     Ok(())
 }
 
-fn generate_stub_types(out_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_stub_types(out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // Generate a marker file indicating stubs are being used
     let stub_marker = out_dir.join("STUB_TYPES");
     std::fs::write(&stub_marker, "Using stub types - proto files not available")?;
