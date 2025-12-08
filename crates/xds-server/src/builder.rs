@@ -132,9 +132,9 @@ impl XdsServerBuilder {
     /// - No cache was provided
     /// - Neither SotW nor Delta is enabled
     pub fn build(self) -> XdsResult<XdsServer> {
-        let cache = self.cache.ok_or_else(|| {
-            XdsError::Configuration("cache is required".into())
-        })?;
+        let cache = self
+            .cache
+            .ok_or_else(|| XdsError::Configuration("cache is required".into()))?;
 
         if !self.enable_sotw && !self.enable_delta {
             return Err(XdsError::Configuration(

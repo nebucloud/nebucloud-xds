@@ -105,7 +105,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    info!("Would listen on {} (server startup placeholder)", config.listen_addr);
+    info!(
+        "Would listen on {} (server startup placeholder)",
+        config.listen_addr
+    );
     info!("Press Ctrl+C to shutdown");
 
     // Wait for shutdown signal

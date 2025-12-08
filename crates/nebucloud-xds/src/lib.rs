@@ -81,7 +81,9 @@ pub mod prelude {
     };
 
     // Cache types
-    pub use xds_cache::{Cache, CacheStats, ShardedCache, Snapshot, SnapshotBuilder, Watch, WatchId};
+    pub use xds_cache::{
+        Cache, CacheStats, ShardedCache, Snapshot, SnapshotBuilder, Watch, WatchId,
+    };
 
     // Server types
     pub use xds_server::{ServerConfig, StreamContext, StreamId, XdsServer, XdsServerBuilder};

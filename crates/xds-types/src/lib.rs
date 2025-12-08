@@ -159,7 +159,8 @@ pub mod envoy {
                     /// Node metadata.
                     pub metadata: Option<prost_types::Struct>,
                     /// Dynamic parameters.
-                    pub dynamic_parameters: std::collections::HashMap<String, crate::xds::core::v3::ContextParams>,
+                    pub dynamic_parameters:
+                        std::collections::HashMap<String, crate::xds::core::v3::ContextParams>,
                     /// Locality.
                     pub locality: Option<Locality>,
                     /// User agent name.

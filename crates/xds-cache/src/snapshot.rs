@@ -161,7 +161,7 @@ impl SnapshotBuilder {
     ///
     /// The version for this resource type defaults to the global version.
     pub fn resources(
-        mut self,
+        self,
         type_url: TypeUrl,
         resources: impl IntoIterator<Item = BoxResource>,
     ) -> Self {
@@ -188,10 +188,13 @@ impl SnapshotBuilder {
 
     /// Add a single resource.
     pub fn resource(mut self, type_url: TypeUrl, resource: BoxResource) -> Self {
-        let entry = self.resources.entry(type_url).or_insert_with(|| {
-            SnapshotResources::new(self.version.clone())
-        });
-        entry.resources.insert(resource.name().to_string(), resource);
+        let entry = self
+            .resources
+            .entry(type_url)
+            .or_insert_with(|| SnapshotResources::new(self.version.clone()));
+        entry
+            .resources
+            .insert(resource.name().to_string(), resource);
         self
     }
 
@@ -206,6 +209,7 @@ impl SnapshotBuilder {
 }
 
 /// Wrapper around `Arc<Snapshot>` for convenient sharing.
+#[allow(dead_code)] // Public API surface
 pub type SharedSnapshot = Arc<Snapshot>;
 
 #[cfg(test)]
@@ -214,9 +218,7 @@ mod tests {
 
     #[test]
     fn snapshot_builder_basic() {
-        let snapshot = Snapshot::builder()
-            .version("v1")
-            .build();
+        let snapshot = Snapshot::builder().version("v1").build();
 
         assert_eq!(snapshot.version(), "v1");
         assert!(snapshot.is_empty());
@@ -226,22 +228,22 @@ mod tests {
     fn snapshot_builder_with_resources() {
         let snapshot = Snapshot::builder()
             .version("v2")
-            .resources(TypeUrl::Cluster, vec![])
+            .resources(TypeUrl::CLUSTER.into(), vec![])
             .build();
 
         assert_eq!(snapshot.version(), "v2");
-        assert!(snapshot.contains_type(TypeUrl::Cluster));
+        assert!(snapshot.contains_type(TypeUrl::CLUSTER.into()));
     }
 
     #[test]
     fn snapshot_resources_version() {
         let snapshot = Snapshot::builder()
             .version("global-v1")
-            .resources(TypeUrl::Cluster, vec![])
+            .resources(TypeUrl::CLUSTER.into(), vec![])
             .build();
 
         assert_eq!(
-            snapshot.get_version(TypeUrl::Cluster),
+            snapshot.get_version(TypeUrl::CLUSTER.into()),
             Some("global-v1")
         );
     }

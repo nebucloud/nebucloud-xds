@@ -222,7 +222,7 @@ mod tests {
         // Set up a snapshot
         let snapshot = Snapshot::builder()
             .version("v1")
-            .resources(TypeUrl::Cluster, vec![])
+            .resources(TypeUrl::CLUSTER.into(), vec![])
             .build();
         cache.set_snapshot(node, snapshot);
 
@@ -238,7 +238,7 @@ mod tests {
         let node = NodeHash::from_id("unknown-node");
 
         let result = handler
-            .process_request(&ctx, TypeUrl::Cluster, "", &[], node)
+            .process_request(&ctx, TypeUrl::CLUSTER.into(), "", &[], node)
             .unwrap();
         assert!(result.is_none());
     }
@@ -250,7 +250,7 @@ mod tests {
 
         // Request with same version
         let result = handler
-            .process_request(&ctx, TypeUrl::Cluster, "v1", &[], node)
+            .process_request(&ctx, TypeUrl::CLUSTER.into(), "v1", &[], node)
             .unwrap();
         assert!(result.is_none());
     }
@@ -262,7 +262,7 @@ mod tests {
 
         // Request with old version
         let result = handler
-            .process_request(&ctx, TypeUrl::Cluster, "v0", &[], node)
+            .process_request(&ctx, TypeUrl::CLUSTER.into(), "v0", &[], node)
             .unwrap();
         assert!(result.is_some());
         let response = result.unwrap();

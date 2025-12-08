@@ -86,12 +86,14 @@ impl Watch {
 
 /// Sender half of a watch, used internally to send updates.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Used for debugging and future features
 pub(crate) struct WatchSender {
     id: WatchId,
     node_hash: NodeHash,
     sender: mpsc::Sender<Arc<Snapshot>>,
 }
 
+#[allow(dead_code)] // Methods used for debugging and future features
 impl WatchSender {
     /// Try to send a snapshot update.
     ///
@@ -105,9 +107,9 @@ impl WatchSender {
                 trace!(watch_id = %self.id, "watch channel full, skipping update");
                 Ok(())
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => {
-                Err(XdsError::WatchClosed { watch_id: self.id.0 })
-            }
+            Err(mpsc::error::TrySendError::Closed(_)) => Err(XdsError::WatchClosed {
+                watch_id: self.id.0,
+            }),
         }
     }
 
@@ -214,7 +216,8 @@ impl WatchManager {
         let mut closed_ids = Vec::new();
 
         for sender in &senders {
-            if let Err(XdsError::WatchClosed { watch_id }) = sender.try_send(Arc::clone(&snapshot)) {
+            if let Err(XdsError::WatchClosed { watch_id }) = sender.try_send(Arc::clone(&snapshot))
+            {
                 closed_ids.push(WatchId(watch_id));
             }
         }

@@ -228,9 +228,7 @@ impl From<XdsError> for tonic::Status {
                 tonic::Status::invalid_argument(err.to_string())
             }
             XdsError::ResourceNotFound { .. } => tonic::Status::not_found(err.to_string()),
-            XdsError::VersionMismatch { .. } => {
-                tonic::Status::failed_precondition(err.to_string())
-            }
+            XdsError::VersionMismatch { .. } => tonic::Status::failed_precondition(err.to_string()),
             XdsError::CacheError { .. }
             | XdsError::WatchError { .. }
             | XdsError::SnapshotIncomplete { .. } => tonic::Status::internal(err.to_string()),
@@ -279,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_internal_error_helper() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test error");
+        let io_err = std::io::Error::other("test error");
         let err = XdsError::internal("operation failed", io_err);
         assert!(matches!(err, XdsError::Internal { .. }));
     }
