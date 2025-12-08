@@ -1,0 +1,238 @@
+# Proto Submodule Sync Workflow
+# Automatically keeps proto submodules up to date with upstream
+#
+# Schedule: Weekly on Sunday at 00:00 UTC
+# Manual: Can be triggered manually from Actions tab
+
+name: Proto Sync
+
+on:
+  schedule:
+    # Run weekly on Sunday at 00:00 UTC
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (don't create PR)"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  sync-protos:
+    name: Sync Proto Submodules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get current submodule status
+        id: before
+        run: |
+          echo "## Current Submodule Status" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          git submodule status >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          # Save current commits for comparison
+          echo "status<<EOF" >> $GITHUB_OUTPUT
+          git submodule status >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update submodules
+        id: update
+        run: |
+          echo "Fetching latest from all submodules..."
+          git submodule update --remote --merge
+          
+          # Check if there are changes
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No submodule updates available" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "## Submodule Updates Available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Generate change summary
+        id: summary
+        if: steps.update.outputs.has_changes == 'true'
+        run: |
+          # Create a detailed summary of changes
+          SUMMARY=""
+          
+          for submodule in $(git submodule status | awk '{print $2}'); do
+            cd "$submodule"
+            
+            # Get the submodule name (last part of path)
+            name=$(basename "$submodule")
+            
+            # Get commit info
+            old_commit=$(echo "${{ steps.before.outputs.status }}" | grep "$submodule" | awk '{print substr($1, 2, 7)}')
+            new_commit=$(git rev-parse --short HEAD)
+            
+            if [ "$old_commit" != "$new_commit" ]; then
+              # Count commits
+              commit_count=$(git rev-list --count ${old_commit}..${new_commit} 2>/dev/null || echo "?")
+              
+              SUMMARY="${SUMMARY}
+          ### ${name}
+          - **Old**: \`${old_commit}\`
+          - **New**: \`${new_commit}\`
+          - **Commits**: ${commit_count}
+          "
+              
+              # Get recent commit messages (last 5)
+              SUMMARY="${SUMMARY}
+          <details>
+          <summary>Recent commits</summary>
+
+          \`\`\`
+          $(git log --oneline ${old_commit}..${new_commit} 2>/dev/null | head -10 || echo "Unable to get commit log")
+          \`\`\`
+
+          </details>
+          "
+            fi
+            
+            cd - > /dev/null
+          done
+          
+          # Save summary to file for PR body
+          echo "$SUMMARY" > /tmp/pr_summary.md
+          
+          echo "## Changes" >> $GITHUB_STEP_SUMMARY
+          echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Rust toolchain
+        if: steps.update.outputs.has_changes == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        if: steps.update.outputs.has_changes == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify build
+        if: steps.update.outputs.has_changes == 'true'
+        run: |
+          echo "## Build Verification" >> $GITHUB_STEP_SUMMARY
+          
+          if cargo build --all-features 2>&1; then
+            echo "✅ Build passed" >> $GITHUB_STEP_SUMMARY
+            echo "build_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Build failed" >> $GITHUB_STEP_SUMMARY
+            echo "build_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        id: tests
+        if: steps.update.outputs.has_changes == 'true'
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          
+          if cargo test --all-features 2>&1; then
+            echo "✅ Tests passed" >> $GITHUB_STEP_SUMMARY
+            echo "tests_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Tests failed - PR will still be created for review" >> $GITHUB_STEP_SUMMARY
+            echo "tests_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create branch and commit
+        if: steps.update.outputs.has_changes == 'true' && inputs.dry_run != 'true'
+        run: |
+          # Create a dated branch
+          BRANCH_NAME="chore/proto-sync-$(date +%Y%m%d)"
+          
+          # Check if branch already exists remotely
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            echo "Branch $BRANCH_NAME already exists, using timestamped name"
+            BRANCH_NAME="chore/proto-sync-$(date +%Y%m%d-%H%M%S)"
+          fi
+          
+          git checkout -b "$BRANCH_NAME"
+          git add .
+          git commit -m "chore(proto): sync submodules to latest upstream
+
+          Automated proto submodule sync.
+          
+          See PR description for detailed changes."
+          
+          git push -u origin "$BRANCH_NAME"
+          
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        if: steps.update.outputs.has_changes == 'true' && inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Build PR body
+          TEST_STATUS=""
+          if [ "${{ steps.tests.outputs.tests_passed }}" == "true" ]; then
+            TEST_STATUS="✅ All tests passing"
+          else
+            TEST_STATUS="⚠️ Some tests failed - manual review required"
+          fi
+          
+          PR_BODY="## Automated Proto Submodule Sync
+
+          This PR was automatically created by the proto-sync workflow.
+
+          ### Status
+          - Build: ✅ Passed
+          - Tests: ${TEST_STATUS}
+
+          $(cat /tmp/pr_summary.md)
+
+          ---
+
+          ### Checklist
+          - [ ] Review submodule changes
+          - [ ] Verify no breaking API changes
+          - [ ] Run integration tests if needed
+
+          ### Related
+          - Workflow: [Proto Sync](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          "
+          
+          gh pr create \
+            --title "chore(proto): sync submodules to latest upstream ($(date +%Y-%m-%d))" \
+            --body "$PR_BODY" \
+            --label "dependencies" \
+            --label "automated"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## Workflow Complete" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.update.outputs.has_changes }}" == "true" ]; then
+            if [ "${{ inputs.dry_run }}" == "true" ]; then
+              echo "🔍 Dry run - no PR created" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ PR created for review" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "ℹ️ All submodules are up to date" >> $GITHUB_STEP_SUMMARY
+          fi
