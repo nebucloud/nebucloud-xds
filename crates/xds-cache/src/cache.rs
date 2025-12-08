@@ -336,10 +336,8 @@ mod tests {
             handles.push(thread::spawn(move || {
                 for j in 0..100 {
                     let node = NodeHash::from_id(&format!("node-{}-{}", i, j));
-                    cache.set_snapshot(
-                        node,
-                        Snapshot::builder().version(&format!("v{}", j)).build(),
-                    );
+                    cache
+                        .set_snapshot(node, Snapshot::builder().version(format!("v{}", j)).build());
                 }
             }));
         }
@@ -370,10 +368,8 @@ mod tests {
             let writes = Arc::clone(&writes);
             handles.push(thread::spawn(move || {
                 for i in 1..=50 {
-                    cache.set_snapshot(
-                        node,
-                        Snapshot::builder().version(&format!("v{}", i)).build(),
-                    );
+                    cache
+                        .set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
                     writes.fetch_add(1, Ordering::Relaxed);
                     thread::sleep(Duration::from_micros(100));
                 }
@@ -412,10 +408,7 @@ mod tests {
         // Add 10,000 nodes
         for i in 0..10000 {
             let node = NodeHash::from_id(&format!("node-{}", i));
-            cache.set_snapshot(
-                node,
-                Snapshot::builder().version(&format!("v{}", i)).build(),
-            );
+            cache.set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
         }
 
         assert_eq!(cache.snapshot_count(), 10000);
@@ -474,10 +467,7 @@ mod tests {
 
         // Send multiple updates
         for i in 1..=3 {
-            cache.set_snapshot(
-                node,
-                Snapshot::builder().version(&format!("v{}", i)).build(),
-            );
+            cache.set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
         }
 
         // Watch should receive all updates (buffered)
