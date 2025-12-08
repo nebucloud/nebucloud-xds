@@ -254,12 +254,48 @@ impl WatchManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc as StdArc;
+    use std::thread;
 
     #[test]
     fn watch_id_unique() {
         let id1 = WatchId::next();
         let id2 = WatchId::next();
         assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn watch_id_display() {
+        let id = WatchId::next();
+        let display = format!("{}", id);
+        assert!(display.starts_with("watch-"));
+    }
+
+    #[test]
+    fn watch_id_concurrent_uniqueness() {
+        use std::collections::HashSet;
+        use std::sync::Mutex;
+
+        let ids = StdArc::new(Mutex::new(HashSet::new()));
+        let mut handles = vec![];
+
+        // Spawn 10 threads, each generating 100 IDs
+        for _ in 0..10 {
+            let ids = StdArc::clone(&ids);
+            handles.push(thread::spawn(move || {
+                for _ in 0..100 {
+                    let id = WatchId::next();
+                    ids.lock().unwrap().insert(id.0);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // All 1000 IDs should be unique
+        assert_eq!(ids.lock().unwrap().len(), 1000);
     }
 
     #[tokio::test]
@@ -287,5 +323,137 @@ mod tests {
 
         manager.cancel_watch(watch.id());
         assert_eq!(manager.watch_count(node), 0);
+    }
+
+    #[test]
+    fn watch_manager_cancel_nonexistent() {
+        let manager = WatchManager::new();
+        // Should not panic
+        manager.cancel_watch(WatchId::next());
+    }
+
+    #[tokio::test]
+    async fn watch_manager_multiple_watches_same_node() {
+        let manager = WatchManager::new();
+        let node = NodeHash::from_id("test-node");
+
+        let mut watch1 = manager.create_watch(node);
+        let mut watch2 = manager.create_watch(node);
+        let mut watch3 = manager.create_watch(node);
+
+        assert_eq!(manager.watch_count(node), 3);
+        assert_eq!(manager.total_watch_count(), 3);
+
+        let snapshot = Arc::new(Snapshot::builder().version("v1").build());
+        manager.notify(node, snapshot);
+
+        // All watches should receive the notification
+        let r1 = watch1.recv().await.unwrap();
+        let r2 = watch2.recv().await.unwrap();
+        let r3 = watch3.recv().await.unwrap();
+
+        assert_eq!(r1.version(), "v1");
+        assert_eq!(r2.version(), "v1");
+        assert_eq!(r3.version(), "v1");
+    }
+
+    #[tokio::test]
+    async fn watch_manager_multiple_nodes() {
+        let manager = WatchManager::new();
+        let node1 = NodeHash::from_id("node-1");
+        let node2 = NodeHash::from_id("node-2");
+
+        let mut watch1 = manager.create_watch(node1);
+        let mut watch2 = manager.create_watch(node2);
+
+        assert_eq!(manager.total_watch_count(), 2);
+
+        // Notify only node1
+        let snapshot1 = Arc::new(Snapshot::builder().version("v1").build());
+        manager.notify(node1, snapshot1);
+
+        // watch1 should receive, watch2 should not (use try_recv)
+        let r1 = watch1.recv().await.unwrap();
+        assert_eq!(r1.version(), "v1");
+
+        // Notify node2
+        let snapshot2 = Arc::new(Snapshot::builder().version("v2").build());
+        manager.notify(node2, snapshot2);
+
+        let r2 = watch2.recv().await.unwrap();
+        assert_eq!(r2.version(), "v2");
+    }
+
+    #[tokio::test]
+    async fn watch_manager_notify_nonexistent_node() {
+        let manager = WatchManager::new();
+        let node = NodeHash::from_id("nonexistent");
+
+        // Should not panic
+        let snapshot = Arc::new(Snapshot::builder().version("v1").build());
+        manager.notify(node, snapshot);
+    }
+
+    #[test]
+    fn watch_manager_cleanup_cancelled_watches() {
+        let manager = WatchManager::new();
+        let node = NodeHash::from_id("test-node");
+
+        let watch1 = manager.create_watch(node);
+        let watch2 = manager.create_watch(node);
+        let watch3 = manager.create_watch(node);
+
+        assert_eq!(manager.watch_count(node), 3);
+
+        manager.cancel_watch(watch2.id());
+        assert_eq!(manager.watch_count(node), 2);
+
+        manager.cancel_watch(watch1.id());
+        assert_eq!(manager.watch_count(node), 1);
+
+        manager.cancel_watch(watch3.id());
+        assert_eq!(manager.watch_count(node), 0);
+    }
+
+    #[tokio::test]
+    async fn watch_receive_timeout() {
+        use tokio::time::{timeout, Duration};
+
+        let manager = WatchManager::new();
+        let node = NodeHash::from_id("test-node");
+
+        let mut watch = manager.create_watch(node);
+
+        // No notification sent, should timeout
+        let result = timeout(Duration::from_millis(10), watch.recv()).await;
+        assert!(result.is_err(), "Should timeout without notification");
+    }
+
+    #[tokio::test]
+    async fn watch_dropped_sender_closes_watch() {
+        let node = NodeHash::from_id("test-node");
+        let mut watch;
+
+        {
+            let manager = WatchManager::new();
+            watch = manager.create_watch(node);
+            // manager dropped here
+        }
+
+        // Channel should be closed
+        let result = watch.recv().await;
+        assert!(
+            result.is_none(),
+            "Watch should close when manager is dropped"
+        );
+    }
+
+    #[test]
+    fn watch_with_custom_buffer_size() {
+        let manager = WatchManager::with_buffer_size(1);
+        let node = NodeHash::from_id("test-node");
+
+        let _watch = manager.create_watch(node);
+        assert_eq!(manager.channel_buffer, 1);
     }
 }

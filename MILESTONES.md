@@ -11,7 +11,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | Milestone | Target | Status | Progress |
 |-----------|--------|--------|----------|
 | [M1: Foundation](#m1-foundation) | Week 1-2 | 🟢 Complete | 100% |
-| [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟡 In Progress | 75% |
+| [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟡 In Progress | 87.5% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🔴 Not Started | 0% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🔴 Not Started | 0% |
 | [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🔴 Not Started | 0% |
@@ -61,7 +61,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | 9 | Implement XdsError with 16 error variants | P0 | 4h | - | 🟢 |
 | 10 | Add ResourceVersion and NodeHash types | P0 | 2h | - | 🟢 |
 | 11 | Create generic Resource trait | P0 | 4h | - | 🟢 |
-| 12 | Implement ResourceRegistry | P0 | 2h | - | 🔴 |
+| 12 | Implement ResourceRegistry | P0 | 2h | - | 🟢 |
 | 13 | Build ShardedCache with DashMap | P0 | 8h | - | 🟢 |
 | 14 | Implement Watch and WatchManager | P0 | 4h | - | 🟢 |
 | 15 | Add Snapshot builder pattern | P1 | 3h | - | 🟢 |

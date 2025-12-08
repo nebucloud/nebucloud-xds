@@ -215,6 +215,44 @@ pub type SharedSnapshot = Arc<Snapshot>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xds_core::Resource;
+
+    /// A simple test resource for testing
+    #[derive(Debug)]
+    struct TestResource {
+        name: String,
+        data: Vec<u8>,
+    }
+
+    impl TestResource {
+        fn new(name: impl Into<String>) -> Self {
+            Self {
+                name: name.into(),
+                data: vec![],
+            }
+        }
+    }
+
+    impl Resource for TestResource {
+        fn type_url(&self) -> &str {
+            "test.type/TestResource"
+        }
+
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn encode(&self) -> Result<prost_types::Any, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(prost_types::Any {
+                type_url: self.type_url().to_string(),
+                value: self.data.clone(),
+            })
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
 
     #[test]
     fn snapshot_builder_basic() {
@@ -246,5 +284,169 @@ mod tests {
             snapshot.get_version(TypeUrl::CLUSTER.into()),
             Some("global-v1")
         );
+    }
+
+    #[test]
+    fn snapshot_with_custom_version_per_type() {
+        let snapshot = Snapshot::builder()
+            .version("global-v1")
+            .resources_with_version(TypeUrl::CLUSTER.into(), "cluster-v2", vec![])
+            .resources_with_version(TypeUrl::LISTENER.into(), "listener-v3", vec![])
+            .build();
+
+        assert_eq!(
+            snapshot.get_version(TypeUrl::CLUSTER.into()),
+            Some("cluster-v2")
+        );
+        assert_eq!(
+            snapshot.get_version(TypeUrl::LISTENER.into()),
+            Some("listener-v3")
+        );
+    }
+
+    #[test]
+    fn snapshot_with_actual_resources() {
+        let resource1: BoxResource = Arc::new(TestResource::new("resource-1"));
+        let resource2: BoxResource = Arc::new(TestResource::new("resource-2"));
+
+        let type_url = TypeUrl::new("test.type/TestResource");
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resources(type_url.clone(), vec![resource1, resource2])
+            .build();
+
+        assert_eq!(snapshot.total_resources(), 2);
+        assert!(!snapshot.is_empty());
+
+        let resources = snapshot.get_resources(type_url).unwrap();
+        assert_eq!(resources.len(), 2);
+    }
+
+    #[test]
+    fn snapshot_get_resource_by_name() {
+        let resource: BoxResource = Arc::new(TestResource::new("my-resource"));
+        let type_url = TypeUrl::new("test.type/TestResource");
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resources(type_url.clone(), vec![resource])
+            .build();
+
+        // Use get_resources to get the SnapshotResources, then get() to find by name
+        let resources = snapshot.get_resources(type_url.clone()).unwrap();
+        let found = resources.get("my-resource");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name(), "my-resource");
+
+        let not_found = resources.get("nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn snapshot_add_single_resource() {
+        let resource: BoxResource = Arc::new(TestResource::new("single"));
+        let type_url = TypeUrl::new("test.type/TestResource");
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resource(type_url.clone(), resource)
+            .build();
+
+        assert_eq!(snapshot.total_resources(), 1);
+    }
+
+    #[test]
+    fn snapshot_multiple_types() {
+        let cluster: BoxResource = Arc::new(TestResource::new("cluster-1"));
+        let listener: BoxResource = Arc::new(TestResource::new("listener-1"));
+        let route: BoxResource = Arc::new(TestResource::new("route-1"));
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resource(TypeUrl::CLUSTER.into(), cluster)
+            .resource(TypeUrl::LISTENER.into(), listener)
+            .resource(TypeUrl::ROUTE.into(), route)
+            .build();
+
+        assert_eq!(snapshot.total_resources(), 3);
+        assert!(snapshot.contains_type(TypeUrl::CLUSTER.into()));
+        assert!(snapshot.contains_type(TypeUrl::LISTENER.into()));
+        assert!(snapshot.contains_type(TypeUrl::ROUTE.into()));
+    }
+
+    #[test]
+    fn snapshot_type_urls() {
+        let cluster: BoxResource = Arc::new(TestResource::new("cluster-1"));
+        let listener: BoxResource = Arc::new(TestResource::new("listener-1"));
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resource(TypeUrl::CLUSTER.into(), cluster)
+            .resource(TypeUrl::LISTENER.into(), listener)
+            .build();
+
+        let type_urls: Vec<_> = snapshot.type_urls().collect();
+        assert_eq!(type_urls.len(), 2);
+    }
+
+    #[test]
+    fn snapshot_created_at() {
+        use std::time::Instant;
+
+        let before = Instant::now();
+        let snapshot = Snapshot::builder().version("v1").build();
+        let after = Instant::now();
+
+        assert!(snapshot.created_at() >= before);
+        assert!(snapshot.created_at() <= after);
+    }
+
+    #[test]
+    fn snapshot_age_via_created_at() {
+        use std::time::Duration;
+
+        let snapshot = Snapshot::builder().version("v1").build();
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Calculate age from created_at
+        let elapsed = snapshot.created_at().elapsed();
+        assert!(elapsed.as_millis() >= 10);
+    }
+
+    #[test]
+    fn snapshot_resource_iteration() {
+        let resource: BoxResource = Arc::new(TestResource::new("my-resource"));
+        let type_url = TypeUrl::new("test.type/TestResource");
+
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resources(type_url.clone(), vec![resource])
+            .build();
+
+        assert_eq!(snapshot.total_resources(), 1);
+        let resources = snapshot.get_resources(type_url).unwrap();
+        // Use the iter() method instead of indexing
+        let items: Vec<_> = resources.iter().collect();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].1.name(), "my-resource");
+    }
+
+    #[test]
+    fn snapshot_empty_version() {
+        let snapshot = Snapshot::builder().version("").build();
+        assert_eq!(snapshot.version(), "");
+    }
+
+    #[test]
+    fn snapshot_is_empty_with_empty_resources() {
+        // A snapshot with type but no actual resources
+        let snapshot = Snapshot::builder()
+            .version("v1")
+            .resources(TypeUrl::CLUSTER.into(), vec![])
+            .build();
+
+        // is_empty should return true since there are no actual resources
+        assert!(snapshot.is_empty());
     }
 }
