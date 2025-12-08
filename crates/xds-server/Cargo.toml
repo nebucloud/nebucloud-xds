@@ -1,0 +1,51 @@
+[package]
+name = "xds-server"
+description = "gRPC server implementation for xDS control plane"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["xds", "envoy", "grpc", "server"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+xds-core = { workspace = true }
+xds-cache = { workspace = true }
+xds-types = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["sync", "signal", "time", "rt-multi-thread"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+
+# gRPC
+tonic = { workspace = true }
+tonic-health = { workspace = true }
+tonic-reflection = { workspace = true, optional = true }
+
+# Protobuf
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
+
+# Async utilities
+async-trait = { workspace = true }
+pin-project-lite = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tokio-test = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[features]
+default = ["reflection", "metrics"]
+reflection = ["dep:tonic-reflection"]
+metrics = ["dep:metrics-exporter-prometheus"]
+
+[lints]
+workspace = true

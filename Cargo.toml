@@ -1,4 +1,108 @@
 [workspace]
-
-members = [ "rust-control-plane", "data-plane-api", "test-xds" ]
 resolver = "2"
+
+members = [
+    # Core crates
+    "crates/xds-core",
+    "crates/xds-types", 
+    "crates/xds-cache",
+    "crates/xds-server",
+    "crates/nebucloud-xds",
+    
+    # Examples
+    "examples/simple-server",
+    "examples/kubernetes-controller",
+    
+    # Integration tests
+    "tests/integration",
+]
+
+# Exclude legacy crates that need protoc
+exclude = [
+    "rust-control-plane",
+    "data-plane-api",
+    "test-xds",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+repository = "https://github.com/nebucloud/nebucloud-xds"
+homepage = "https://github.com/nebucloud/nebucloud-xds"
+documentation = "https://docs.rs/nebucloud-xds"
+keywords = ["xds", "envoy", "grpc", "service-mesh", "control-plane"]
+categories = ["network-programming", "asynchronous"]
+
+[workspace.dependencies]
+# Internal crates
+xds-core = { version = "0.1.0", path = "crates/xds-core" }
+xds-types = { version = "0.1.0", path = "crates/xds-types" }
+xds-cache = { version = "0.1.0", path = "crates/xds-cache" }
+xds-server = { version = "0.1.0", path = "crates/xds-server" }
+nebucloud-xds = { version = "0.1.0", path = "crates/nebucloud-xds" }
+
+# Legacy (during migration)
+data-plane-api = { version = "0.2.0", path = "data-plane-api" }
+
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+
+# gRPC & Protobuf
+tonic = "0.12"
+tonic-health = "0.12"
+tonic-reflection = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+
+# Concurrency
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Hashing
+sha2 = "0.10"
+fnv = "1.0"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+
+# Async utilities
+async-trait = "0.1"
+pin-project-lite = "0.2"
+
+# Testing
+rstest = "0.23"
+tokio-test = "0.4"
+pretty_assertions = "1.4"
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+# Build dependencies
+prost-build = "0.13"
+tonic-build = "0.12"
+glob = "0.3"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+unwrap_used = "deny"
+expect_used = "warn"
+panic = "deny"

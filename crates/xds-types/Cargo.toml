@@ -1,0 +1,23 @@
+[package]
+name = "xds-types"
+description = "Generated protobuf types for Envoy xDS APIs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["xds", "envoy", "protobuf", "grpc"]
+categories = ["network-programming"]
+
+[dependencies]
+prost = { workspace = true }
+prost-types = { workspace = true }
+tonic = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+tonic-build = { workspace = true }
+glob = { workspace = true }
+
+[lints]
+workspace = true
