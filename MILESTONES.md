@@ -10,7 +10,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 
 | Milestone | Target | Status | Progress |
 |-----------|--------|--------|----------|
-| [M1: Foundation](#m1-foundation) | Week 1-2 | 🟡 In Progress | 87.5% |
+| [M1: Foundation](#m1-foundation) | Week 1-2 | 🟢 Complete | 100% |
 | [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟡 In Progress | 75% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🔴 Not Started | 0% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🔴 Not Started | 0% |
@@ -38,7 +38,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | 5 | Set up proto-sync automation | P1 | 2h | - | 🟢 |
 | 6 | Configure Dependabot | P1 | 1h | - | 🟢 |
 | 7 | Add rust-toolchain.toml (MSRV 1.75) | P1 | 30m | - | 🟢 |
-| 8 | Set up Changesets for versioning | P1 | 2h | - | 🔴 |
+| 8 | Set up Changesets for versioning | P1 | 2h | - | 🟢 |
 
 **Exit Criteria:**
 - [x] All 5 crates created with proper Cargo.toml
