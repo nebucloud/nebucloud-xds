@@ -213,6 +213,24 @@ See [MILESTONES.md](./MILESTONES.md) for the development roadmap:
 
 See the GitHub issues for tasks organized by milestone.
 
+### Versioning
+
+This project uses [Changesets](https://github.com/changesets/changesets) for version management and [git-cliff](https://git-cliff.org) for changelog generation.
+
+**Adding a changeset:**
+
+```bash
+# Create a changeset file manually in .changeset/
+# Or describe your changes in the PR
+```
+
+**Creating a release:**
+
+1. Changesets accumulate in `.changeset/`
+2. Run the Release workflow from GitHub Actions
+3. Select the version bump type (patch/minor/major)
+4. Versions are bumped, CHANGELOG updated, and published to crates.io
+
 ## License
 
 Apache-2.0 OR MIT (dual-licensed)
