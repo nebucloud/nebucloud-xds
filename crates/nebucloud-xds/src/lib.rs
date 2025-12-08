@@ -76,8 +76,8 @@ pub use xds_types as types;
 pub mod prelude {
     // Core types
     pub use xds_core::{
-        BoxResource, NodeHash, Resource, ResourceRegistry, ResourceVersion, TypeUrl, XdsError,
-        XdsResult,
+        BoxResource, NodeHash, Resource, ResourceRegistry, ResourceTypeInfo, ResourceVersion,
+        SharedResourceRegistry, TypeUrl, XdsError, XdsResult,
     };
 
     // Cache types

@@ -3152,6 +3152,7 @@ dependencies = [
 name = "xds-core"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "fnv",
  "pretty_assertions",
  "prost",

@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
+use dashmap::DashMap;
+
 use crate::TypeUrl;
 
 /// Trait for xDS resources.
@@ -250,6 +252,161 @@ impl ResourceRegistry {
     pub fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
+
+    /// Iterate over all registered types.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &ResourceTypeInfo)> {
+        self.types.iter()
+    }
+}
+
+/// Thread-safe registry for resource types.
+///
+/// This is a concurrent version of [`ResourceRegistry`] that can be safely
+/// shared across threads without external synchronization.
+///
+/// Uses `DashMap` internally for lock-free reads and efficient concurrent writes.
+///
+/// # Example
+///
+/// ```rust
+/// use xds_core::{SharedResourceRegistry, TypeUrl};
+/// use std::sync::Arc;
+///
+/// let registry = Arc::new(SharedResourceRegistry::with_envoy_types());
+///
+/// // Can be shared across threads safely
+/// assert!(registry.contains(TypeUrl::CLUSTER));
+/// assert!(registry.contains(TypeUrl::LISTENER));
+/// ```
+#[derive(Debug)]
+pub struct SharedResourceRegistry {
+    types: DashMap<String, ResourceTypeInfo>,
+}
+
+impl Default for SharedResourceRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SharedResourceRegistry {
+    /// Create a new empty thread-safe registry.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            types: DashMap::new(),
+        }
+    }
+
+    /// Create a thread-safe registry pre-populated with standard Envoy types.
+    #[must_use]
+    pub fn with_envoy_types() -> Self {
+        let registry = Self::new();
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::CLUSTER.to_string(),
+            short_name: "Cluster".to_string(),
+            description: "Cluster Discovery Service (CDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::ENDPOINT.to_string(),
+            short_name: "ClusterLoadAssignment".to_string(),
+            description: "Endpoint Discovery Service (EDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::LISTENER.to_string(),
+            short_name: "Listener".to_string(),
+            description: "Listener Discovery Service (LDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::ROUTE.to_string(),
+            short_name: "RouteConfiguration".to_string(),
+            description: "Route Discovery Service (RDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::SECRET.to_string(),
+            short_name: "Secret".to_string(),
+            description: "Secret Discovery Service (SDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::RUNTIME.to_string(),
+            short_name: "Runtime".to_string(),
+            description: "Runtime Discovery Service (RTDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::SCOPED_ROUTE.to_string(),
+            short_name: "ScopedRouteConfiguration".to_string(),
+            description: "Scoped Route Discovery Service (SRDS)".to_string(),
+        });
+
+        registry.register(ResourceTypeInfo {
+            type_url: TypeUrl::VIRTUAL_HOST.to_string(),
+            short_name: "VirtualHost".to_string(),
+            description: "Virtual Host Discovery Service (VHDS)".to_string(),
+        });
+
+        registry
+    }
+
+    /// Register a new resource type.
+    ///
+    /// This is safe to call from multiple threads concurrently.
+    pub fn register(&self, info: ResourceTypeInfo) {
+        self.types.insert(info.type_url.clone(), info);
+    }
+
+    /// Get information about a resource type by type URL.
+    ///
+    /// Returns `None` if the type is not registered.
+    #[must_use]
+    pub fn get(&self, type_url: &str) -> Option<ResourceTypeInfo> {
+        self.types.get(type_url).map(|r| r.clone())
+    }
+
+    /// Check if a type URL is registered.
+    #[must_use]
+    pub fn contains(&self, type_url: &str) -> bool {
+        self.types.contains_key(type_url)
+    }
+
+    /// Get all registered type URLs.
+    #[must_use]
+    pub fn type_urls(&self) -> Vec<String> {
+        self.types.iter().map(|r| r.key().clone()).collect()
+    }
+
+    /// Get the number of registered types.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.types.len()
+    }
+
+    /// Check if the registry is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.types.is_empty()
+    }
+
+    /// Validate that a type URL is registered.
+    ///
+    /// Returns `Ok(())` if registered, or an error with available types if not.
+    pub fn validate(&self, type_url: &str) -> Result<(), String> {
+        if self.contains(type_url) {
+            Ok(())
+        } else {
+            let available: Vec<_> = self.type_urls();
+            Err(format!(
+                "Unknown resource type: {}. Available types: {:?}",
+                type_url, available
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -316,5 +473,91 @@ mod tests {
         #[allow(clippy::unwrap_used)]
         let info = info.unwrap();
         assert_eq!(info.short_name, "Cluster");
+    }
+
+    // SharedResourceRegistry tests
+
+    #[test]
+    fn test_shared_registry_new() {
+        let registry = SharedResourceRegistry::new();
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn test_shared_registry_with_envoy_types() {
+        let registry = SharedResourceRegistry::with_envoy_types();
+        assert!(!registry.is_empty());
+        assert!(registry.contains(TypeUrl::CLUSTER));
+        assert!(registry.contains(TypeUrl::ENDPOINT));
+        assert!(registry.contains(TypeUrl::LISTENER));
+        assert!(registry.contains(TypeUrl::ROUTE));
+        assert!(registry.contains(TypeUrl::SECRET));
+        assert!(registry.contains(TypeUrl::RUNTIME));
+        assert!(registry.contains(TypeUrl::SCOPED_ROUTE));
+        assert!(registry.contains(TypeUrl::VIRTUAL_HOST));
+        assert_eq!(registry.len(), 8);
+    }
+
+    #[test]
+    fn test_shared_registry_register() {
+        let registry = SharedResourceRegistry::new();
+        registry.register(ResourceTypeInfo {
+            type_url: "custom.type".to_string(),
+            short_name: "Custom".to_string(),
+            description: "Custom type".to_string(),
+        });
+
+        assert!(registry.contains("custom.type"));
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[test]
+    fn test_shared_registry_get() {
+        let registry = SharedResourceRegistry::with_envoy_types();
+        let info = registry.get(TypeUrl::CLUSTER);
+        assert!(info.is_some(), "CLUSTER type should be registered");
+        #[allow(clippy::unwrap_used)]
+        let info = info.unwrap();
+        assert_eq!(info.short_name, "Cluster");
+    }
+
+    #[test]
+    fn test_shared_registry_validate() {
+        let registry = SharedResourceRegistry::with_envoy_types();
+
+        // Valid type should pass
+        assert!(registry.validate(TypeUrl::CLUSTER).is_ok());
+
+        // Invalid type should fail with helpful message
+        let err = registry.validate("unknown.type").unwrap_err();
+        assert!(err.contains("Unknown resource type"));
+        assert!(err.contains("unknown.type"));
+    }
+
+    #[test]
+    fn test_shared_registry_thread_safety() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let registry = Arc::new(SharedResourceRegistry::new());
+        let mut handles = vec![];
+
+        // Spawn multiple threads that register types concurrently
+        for i in 0..10 {
+            let reg = Arc::clone(&registry);
+            handles.push(thread::spawn(move || {
+                reg.register(ResourceTypeInfo {
+                    type_url: format!("type.{}", i),
+                    short_name: format!("Type{}", i),
+                    description: format!("Type {} description", i),
+                });
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        assert_eq!(registry.len(), 10);
     }
 }

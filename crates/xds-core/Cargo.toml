@@ -16,6 +16,9 @@ thiserror = { workspace = true }
 # Hashing
 fnv = { workspace = true }
 
+# Concurrent data structures
+dashmap = { workspace = true }
+
 # Serialization
 serde = { workspace = true, optional = true }
 
