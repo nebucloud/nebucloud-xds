@@ -37,7 +37,9 @@ mod version;
 
 pub use error::XdsError;
 pub use node::NodeHash;
-pub use resource::{BoxResource, Resource, ResourceRegistry, ResourceTypeInfo, SharedResourceRegistry};
+pub use resource::{
+    BoxResource, Resource, ResourceRegistry, ResourceTypeInfo, SharedResourceRegistry,
+};
 pub use type_url::TypeUrl;
 pub use version::ResourceVersion;
 

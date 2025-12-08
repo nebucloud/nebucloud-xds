@@ -524,10 +524,10 @@ mod tests {
     #[test]
     fn test_shared_registry_validate() {
         let registry = SharedResourceRegistry::with_envoy_types();
-        
+
         // Valid type should pass
         assert!(registry.validate(TypeUrl::CLUSTER).is_ok());
-        
+
         // Invalid type should fail with helpful message
         let err = registry.validate("unknown.type").unwrap_err();
         assert!(err.contains("Unknown resource type"));
