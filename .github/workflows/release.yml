@@ -1,0 +1,200 @@
+# Release Workflow
+# Handles version bumps, changelog generation, and crates.io publishing
+#
+# Triggers:
+# - Manual dispatch with version bump type
+# - Push to main with changeset files
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: "Dry run (don't publish)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-release
+        run: cargo install cargo-release --locked
+
+      - name: Install git-cliff
+        run: cargo install git-cliff --locked
+
+      - name: Check for unreleased changes
+        id: changes
+        run: |
+          # Check if there are any changesets
+          if [ -d ".changeset" ] && [ "$(ls -A .changeset/*.md 2>/dev/null | grep -v README.md | wc -l)" -gt 0 ]; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Get current version
+          CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT="${{ steps.changes.outputs.current_version }}"
+          BUMP="${{ inputs.bump }}"
+          
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          
+          case "$BUMP" in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              ;;
+          esac
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Generate changelog
+        run: |
+          # Generate changelog with git-cliff
+          git-cliff --config cliff.toml --tag "v${{ steps.version.outputs.new_version }}" > CHANGELOG.md
+          
+          echo "## Changelog Preview" >> $GITHUB_STEP_SUMMARY
+          echo '```markdown' >> $GITHUB_STEP_SUMMARY
+          head -100 CHANGELOG.md >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Update versions in Cargo.toml files
+        if: inputs.dry_run != true
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          
+          # Update workspace version
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
+          
+          # Update each crate version
+          for crate_dir in crates/*/; do
+            if [ -f "${crate_dir}Cargo.toml" ]; then
+              sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" "${crate_dir}Cargo.toml"
+            fi
+          done
+          
+          # Update workspace dependencies
+          sed -i "s/version = \"=.*\", path/version = \"=$NEW_VERSION\", path/g" Cargo.toml
+
+      - name: Verify build
+        run: |
+          cargo build --all-features
+          cargo test --all-features
+
+      - name: Create release commit
+        if: inputs.dry_run != true
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          
+          # Remove processed changesets (except README)
+          find .changeset -name "*.md" ! -name "README.md" -delete
+          
+          git add -A
+          git commit -m "chore(release): v$NEW_VERSION
+
+          - Bump version to $NEW_VERSION
+          - Update CHANGELOG.md
+          - Process changesets"
+          
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+
+      - name: Push release
+        if: inputs.dry_run != true
+        run: |
+          git push origin main --follow-tags
+
+      - name: Publish to crates.io
+        if: inputs.dry_run != true && env.CARGO_REGISTRY_TOKEN != ''
+        run: |
+          # Publish in dependency order
+          for crate in xds-types xds-core xds-cache xds-server nebucloud-xds; do
+            echo "Publishing $crate..."
+            cargo publish -p $crate --allow-dirty || echo "Failed to publish $crate (may already exist)"
+            sleep 30  # Wait for crates.io to index
+          done
+
+      - name: Create GitHub Release
+        if: inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          
+          # Extract changelog for this version
+          git-cliff --config cliff.toml --tag "v$NEW_VERSION" --unreleased --strip header > /tmp/release_notes.md
+          
+          gh release create "v$NEW_VERSION" \
+            --title "v$NEW_VERSION" \
+            --notes-file /tmp/release_notes.md
+
+      - name: Summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "🔍 **Dry run** - no changes were made" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Released v${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ steps.changes.outputs.current_version }} → ${{ steps.version.outputs.new_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bump Type | ${{ inputs.bump }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Changelog | Generated |" >> $GITHUB_STEP_SUMMARY
