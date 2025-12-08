@@ -10,7 +10,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 
 | Milestone | Target | Status | Progress |
 |-----------|--------|--------|----------|
-| [M1: Foundation](#m1-foundation) | Week 1-2 | 🟡 In Progress | 62.5% |
+| [M1: Foundation](#m1-foundation) | Week 1-2 | 🟡 In Progress | 75% |
 | [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟡 In Progress | 75% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🔴 Not Started | 0% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🔴 Not Started | 0% |
@@ -32,7 +32,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | # | Issue | Priority | Estimate | Assignee | Status |
 |---|-------|----------|----------|----------|--------|
 | 1 | Create 5-crate workspace structure | P0 | 2h | - | 🟢 |
-| 2 | Update proto submodules (526 commits behind) | P0 | 4h | - | 🔴 |
+| 2 | Update proto submodules (526 commits behind) | P0 | 4h | - | 🟢 |
 | 3 | Set up cargo-deny and security auditing | P0 | 2h | - | 🟢 |
 | 4 | Configure CI pipeline (GitHub Actions) | P0 | 4h | - | 🟢 |
 | 5 | Set up proto-sync automation | P1 | 2h | - | 🔴 |
@@ -42,7 +42,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 
 **Exit Criteria:**
 - [x] All 5 crates created with proper Cargo.toml
-- [ ] Proto submodules updated to latest
+- [x] Proto submodules updated to latest
 - [x] CI passing on `main` branch
 - [x] cargo-deny passing
 
