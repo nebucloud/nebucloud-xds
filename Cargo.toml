@@ -13,6 +13,9 @@ members = [
     "examples/simple-server",
     "examples/kubernetes-controller",
     
+    # Tools
+    "tools/xds-mcp",
+    
     # Integration tests
     "tests/integration",
 ]
