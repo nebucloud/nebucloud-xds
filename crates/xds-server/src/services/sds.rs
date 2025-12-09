@@ -71,24 +71,28 @@ impl SdsService {
     }
 
     /// Convert a SotW response to a proto DiscoveryResponse.
+    ///
+    /// Returns an error if any resource fails to encode, rather than
+    /// silently dropping it.
     fn convert_response(
         &self,
         response: crate::sotw::SotwResponse,
-    ) -> DiscoveryResponse {
+    ) -> Result<DiscoveryResponse, Status> {
         use data_plane_api::google::protobuf::Any;
 
         let resources: Vec<Any> = response
             .resources
             .iter()
-            .filter_map(|r| {
-                r.encode().ok().map(|encoded| Any {
+            .map(|r| {
+                r.encode().map(|encoded| Any {
                     type_url: encoded.type_url.clone(),
                     value: encoded.value.clone(),
                 })
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| Status::internal(format!("failed to encode resource: {}", e)))?;
 
-        DiscoveryResponse {
+        Ok(DiscoveryResponse {
             version_info: response.version_info,
             resources,
             type_url: TypeUrl::SECRET.to_string(),
@@ -96,7 +100,7 @@ impl SdsService {
             canary: false,
             control_plane: None,
             resource_errors: vec![],
-        }
+        })
     }
 }
 
@@ -151,7 +155,17 @@ impl SecretDiscoveryService for SdsService {
 
                         let hash = match node_hash {
                             Some(h) => h,
-                            None => continue,
+                            None => {
+                                // First request must include node information
+                                error!(
+                                    stream = %ctx.id(),
+                                    "first request missing required node information"
+                                );
+                                let _ = tx.send(Err(Status::invalid_argument(
+                                    "first request must include node information"
+                                ))).await;
+                                break;
+                            }
                         };
 
                         // Process request
@@ -163,9 +177,17 @@ impl SecretDiscoveryService for SdsService {
                             hash,
                         ) {
                             Ok(Some(response)) => {
-                                let discovery_response = service.convert_response(response);
-                                if tx.send(Ok(discovery_response)).await.is_err() {
-                                    break;
+                                match service.convert_response(response) {
+                                    Ok(discovery_response) => {
+                                        if tx.send(Ok(discovery_response)).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!(stream = %ctx.id(), error = %e, "failed to convert response");
+                                        let _ = tx.send(Err(e)).await;
+                                        break;
+                                    }
                                 }
                             }
                             Ok(None) => {}
@@ -253,7 +275,7 @@ impl SecretDiscoveryService for SdsService {
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("no secrets available"))?;
 
-        Ok(Response::new(self.convert_response(response)))
+        Ok(Response::new(self.convert_response(response)?))
     }
 }
 
