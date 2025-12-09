@@ -218,6 +218,9 @@ impl CacheBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn cache_basic_operations() {
@@ -286,5 +289,232 @@ mod tests {
             .build();
 
         assert_eq!(cache.snapshot_count(), 0);
+    }
+
+    // === Concurrent Access Tests ===
+
+    #[test]
+    fn cache_concurrent_reads() {
+        let cache = Arc::new(ShardedCache::new());
+        let node = NodeHash::from_id("test-node");
+
+        // Pre-populate cache
+        cache.set_snapshot(node, Snapshot::builder().version("v1").build());
+
+        let read_count = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+
+        // Spawn 10 reader threads
+        for _ in 0..10 {
+            let cache = Arc::clone(&cache);
+            let count = Arc::clone(&read_count);
+            handles.push(thread::spawn(move || {
+                for _ in 0..100 {
+                    if cache.get_snapshot(node).is_some() {
+                        count.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        // All reads should succeed
+        assert_eq!(read_count.load(Ordering::Relaxed), 1000);
+    }
+
+    #[test]
+    fn cache_concurrent_writes() {
+        let cache = Arc::new(ShardedCache::new());
+        let mut handles = vec![];
+
+        // Spawn 10 writer threads, each writing to different nodes
+        for i in 0..10 {
+            let cache = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                for j in 0..100 {
+                    let node = NodeHash::from_id(&format!("node-{}-{}", i, j));
+                    cache
+                        .set_snapshot(node, Snapshot::builder().version(format!("v{}", j)).build());
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        // All 1000 nodes should be in cache
+        assert_eq!(cache.snapshot_count(), 1000);
+    }
+
+    #[test]
+    fn cache_concurrent_read_write() {
+        let cache = Arc::new(ShardedCache::new());
+        let node = NodeHash::from_id("contended-node");
+
+        // Pre-populate
+        cache.set_snapshot(node, Snapshot::builder().version("v0").build());
+
+        let reads = Arc::new(AtomicUsize::new(0));
+        let writes = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+
+        // Writer thread
+        {
+            let cache = Arc::clone(&cache);
+            let writes = Arc::clone(&writes);
+            handles.push(thread::spawn(move || {
+                for i in 1..=50 {
+                    cache
+                        .set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
+                    writes.fetch_add(1, Ordering::Relaxed);
+                    thread::sleep(Duration::from_micros(100));
+                }
+            }));
+        }
+
+        // Reader threads
+        for _ in 0..5 {
+            let cache = Arc::clone(&cache);
+            let reads = Arc::clone(&reads);
+            handles.push(thread::spawn(move || {
+                for _ in 0..100 {
+                    if cache.get_snapshot(node).is_some() {
+                        reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                    thread::sleep(Duration::from_micros(50));
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        assert_eq!(writes.load(Ordering::Relaxed), 50);
+        // All reads should succeed (snapshot always exists)
+        assert_eq!(reads.load(Ordering::Relaxed), 500);
+    }
+
+    // === Large Snapshot Tests ===
+
+    #[test]
+    fn cache_many_nodes() {
+        let cache = ShardedCache::with_capacity(10000);
+
+        // Add 10,000 nodes
+        for i in 0..10000 {
+            let node = NodeHash::from_id(&format!("node-{}", i));
+            cache.set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
+        }
+
+        assert_eq!(cache.snapshot_count(), 10000);
+
+        // Verify random access
+        for i in [0, 999, 5000, 9999] {
+            let node = NodeHash::from_id(&format!("node-{}", i));
+            let snap = cache.get_snapshot(node).unwrap();
+            assert_eq!(snap.version(), format!("v{}", i));
+        }
+    }
+
+    #[test]
+    fn cache_snapshot_update() {
+        let cache = ShardedCache::new();
+        let node = NodeHash::from_id("test-node");
+
+        // Initial version
+        cache.set_snapshot(node, Snapshot::builder().version("v1").build());
+        assert_eq!(cache.get_snapshot(node).unwrap().version(), "v1");
+
+        // Update version
+        cache.set_snapshot(node, Snapshot::builder().version("v2").build());
+        assert_eq!(cache.get_snapshot(node).unwrap().version(), "v2");
+
+        // Stats should show 2 sets
+        assert_eq!(cache.stats().snapshots_set(), 2);
+    }
+
+    // === Watch Tests ===
+
+    #[tokio::test]
+    async fn cache_multiple_watches_same_node() {
+        let cache = ShardedCache::new();
+        let node = NodeHash::from_id("test-node");
+
+        let mut watch1 = cache.create_watch(node);
+        let mut watch2 = cache.create_watch(node);
+
+        // Set snapshot
+        cache.set_snapshot(node, Snapshot::builder().version("v1").build());
+
+        // Both watches should receive it
+        let snap1 = watch1.recv().await.unwrap();
+        let snap2 = watch2.recv().await.unwrap();
+        assert_eq!(snap1.version(), "v1");
+        assert_eq!(snap2.version(), "v1");
+    }
+
+    #[tokio::test]
+    async fn cache_watch_receives_updates() {
+        let cache = ShardedCache::new();
+        let node = NodeHash::from_id("test-node");
+
+        let mut watch = cache.create_watch(node);
+
+        // Send multiple updates
+        for i in 1..=3 {
+            cache.set_snapshot(node, Snapshot::builder().version(format!("v{}", i)).build());
+        }
+
+        // Watch should receive all updates (buffered)
+        let snap1 = watch.recv().await.unwrap();
+        assert_eq!(snap1.version(), "v1");
+
+        let snap2 = watch.recv().await.unwrap();
+        assert_eq!(snap2.version(), "v2");
+
+        let snap3 = watch.recv().await.unwrap();
+        assert_eq!(snap3.version(), "v3");
+    }
+
+    // === Edge Cases ===
+
+    #[test]
+    fn cache_clear_nonexistent_node() {
+        let cache = ShardedCache::new();
+        let node = NodeHash::from_id("nonexistent");
+
+        // Should not panic
+        cache.clear_snapshot(node);
+        assert_eq!(cache.snapshot_count(), 0);
+    }
+
+    #[test]
+    fn cache_wildcard_node() {
+        let cache = ShardedCache::new();
+        let wildcard = NodeHash::wildcard();
+
+        cache.set_snapshot(wildcard, Snapshot::builder().version("v1").build());
+        assert!(cache.has_snapshot(wildcard));
+
+        let snap = cache.get_snapshot(wildcard).unwrap();
+        assert_eq!(snap.version(), "v1");
+    }
+
+    #[test]
+    fn cache_node_hash_collision_unlikely() {
+        // FNV-1a should give different hashes for similar strings
+        let node1 = NodeHash::from_id("node-1");
+        let node2 = NodeHash::from_id("node-2");
+        let node3 = NodeHash::from_id("1-node");
+
+        // All should be different (this is a sanity check, not guaranteed)
+        assert_ne!(node1, node2);
+        assert_ne!(node2, node3);
+        assert_ne!(node1, node3);
     }
 }
