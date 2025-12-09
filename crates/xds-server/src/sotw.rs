@@ -10,6 +10,7 @@ use xds_cache::{Cache, ShardedCache};
 use xds_core::{NodeHash, ResourceRegistry, TypeUrl, XdsResult};
 
 use crate::stream::StreamContext;
+use crate::utils::{generate_nonce, NoncePrefix};
 
 /// Handler for State-of-the-World xDS requests.
 ///
@@ -114,7 +115,7 @@ impl SotwHandler {
                 version_info: resources.version().to_string(),
                 resources: resources.to_vec(),
                 type_url,
-                nonce: generate_nonce(),
+                nonce: generate_nonce(NoncePrefix::SotW),
             }
         } else {
             // Specific resources requested
@@ -127,7 +128,7 @@ impl SotwHandler {
                 version_info: resources.version().to_string(),
                 resources: filtered,
                 type_url,
-                nonce: generate_nonce(),
+                nonce: generate_nonce(NoncePrefix::SotW),
             }
         };
 
@@ -191,23 +192,6 @@ pub struct SotwResponse {
     pub nonce: String,
 }
 
-/// Generate a unique nonce for a response.
-fn generate_nonce() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64;
-
-    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    format!("{:x}-{:x}", timestamp, count)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,7 +223,7 @@ mod tests {
 
         let result = handler
             .process_request(&ctx, TypeUrl::CLUSTER.into(), "", &[], node)
-            .unwrap();
+            .expect("process_request should not error");
         assert!(result.is_none());
     }
 
@@ -251,7 +235,7 @@ mod tests {
         // Request with same version
         let result = handler
             .process_request(&ctx, TypeUrl::CLUSTER.into(), "v1", &[], node)
-            .unwrap();
+            .expect("process_request should not error");
         assert!(result.is_none());
     }
 
@@ -263,16 +247,16 @@ mod tests {
         // Request with old version
         let result = handler
             .process_request(&ctx, TypeUrl::CLUSTER.into(), "v0", &[], node)
-            .unwrap();
+            .expect("process_request should not error");
         assert!(result.is_some());
-        let response = result.unwrap();
+        let response = result.expect("response should be Some");
         assert_eq!(response.version_info, "v1");
     }
 
     #[test]
     fn nonce_unique() {
-        let n1 = generate_nonce();
-        let n2 = generate_nonce();
+        let n1 = generate_nonce(NoncePrefix::SotW);
+        let n2 = generate_nonce(NoncePrefix::SotW);
         assert_ne!(n1, n2);
     }
 }

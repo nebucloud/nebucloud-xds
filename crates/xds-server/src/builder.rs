@@ -304,7 +304,7 @@ mod tests {
             .enable_delta()
             .max_concurrent_streams(200)
             .build()
-            .unwrap();
+            .expect("server should build successfully");
 
         assert!(server.config().enable_sotw);
         assert!(server.config().enable_delta);

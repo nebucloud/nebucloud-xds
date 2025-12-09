@@ -11,6 +11,7 @@ use xds_cache::{Cache, ShardedCache};
 use xds_core::{NodeHash, ResourceRegistry, TypeUrl, XdsResult};
 
 use crate::stream::StreamContext;
+use crate::utils::{generate_nonce, NoncePrefix};
 
 /// Tracks the state of resources sent to a client.
 #[derive(Debug, Default)]
@@ -212,7 +213,7 @@ impl DeltaHandler {
             type_url,
             resources: updated,
             removed_resources: removed,
-            nonce: generate_nonce(),
+            nonce: generate_nonce(NoncePrefix::Delta),
             system_version_info: snapshot.version().to_string(),
         };
 
@@ -274,23 +275,6 @@ pub struct DeltaResponse {
     pub nonce: String,
     /// System version info.
     pub system_version_info: String,
-}
-
-/// Generate a unique nonce for a response.
-fn generate_nonce() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64;
-
-    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    format!("d{:x}-{:x}", timestamp, count)
 }
 
 #[cfg(test)]

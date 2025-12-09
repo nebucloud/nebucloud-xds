@@ -375,7 +375,7 @@ mod tests {
                 "",
                 None,
             )
-            .unwrap();
+            .expect("process_sotw_request should not error");
 
         assert!(result.is_none());
     }
@@ -396,10 +396,10 @@ mod tests {
         // Request should return a response (empty resources but valid)
         let result = service
             .process_sotw_request(&ctx, TypeUrl::CLUSTER, "", &[], node_hash, "", None)
-            .unwrap();
+            .expect("process_sotw_request should not error");
 
         assert!(result.is_some());
-        let response = result.unwrap();
+        let response = result.expect("response should be Some");
         assert_eq!(response.version_info, "v1");
     }
 }

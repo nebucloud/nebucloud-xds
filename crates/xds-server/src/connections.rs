@@ -321,7 +321,7 @@ mod tests {
         let tracker = ConnectionTracker::new(ConnectionLimits::new(10, 5));
         assert_eq!(tracker.active_connections(), 0);
 
-        let guard = tracker.try_acquire(None).unwrap();
+        let guard = tracker.try_acquire(None).expect("should acquire connection");
         assert_eq!(tracker.active_connections(), 1);
         assert!(guard.id() > 0);
 
@@ -333,8 +333,8 @@ mod tests {
     fn tracker_max_connections() {
         let tracker = ConnectionTracker::new(ConnectionLimits::new(2, 10));
 
-        let _g1 = tracker.try_acquire(None).unwrap();
-        let _g2 = tracker.try_acquire(None).unwrap();
+        let _g1 = tracker.try_acquire(None).expect("should acquire first connection");
+        let _g2 = tracker.try_acquire(None).expect("should acquire second connection");
 
         // Should be rejected
         assert!(tracker.try_acquire(None).is_none());
@@ -347,14 +347,14 @@ mod tests {
         let addr1 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 8080);
         let addr2 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)), 8080);
 
-        let _g1 = tracker.try_acquire(Some(addr1)).unwrap();
-        let _g2 = tracker.try_acquire(Some(addr1)).unwrap();
+        let _g1 = tracker.try_acquire(Some(addr1)).expect("should acquire first connection");
+        let _g2 = tracker.try_acquire(Some(addr1)).expect("should acquire second connection");
 
         // Third connection from same IP should be rejected
         assert!(tracker.try_acquire(Some(addr1)).is_none());
 
         // But different IP should work
-        let _g3 = tracker.try_acquire(Some(addr2)).unwrap();
+        let _g3 = tracker.try_acquire(Some(addr2)).expect("should acquire from different IP");
     }
 
     #[test]
@@ -364,13 +364,13 @@ mod tests {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 8080);
 
         {
-            let _g1 = tracker.try_acquire(Some(addr)).unwrap();
-            let _g2 = tracker.try_acquire(Some(addr)).unwrap();
+            let _g1 = tracker.try_acquire(Some(addr)).expect("should acquire first");
+            let _g2 = tracker.try_acquire(Some(addr)).expect("should acquire second");
             assert!(tracker.try_acquire(Some(addr)).is_none());
         }
 
         // After guards dropped, should be able to acquire again
-        let _g = tracker.try_acquire(Some(addr)).unwrap();
+        let _g = tracker.try_acquire(Some(addr)).expect("should acquire after release");
         assert_eq!(tracker.connections_for_ip(addr.ip()), 1);
     }
 
@@ -378,7 +378,7 @@ mod tests {
     fn tracker_stream_counting() {
         let tracker = ConnectionTracker::new(ConnectionLimits::new(10, 10).with_max_streams(2));
 
-        let guard = tracker.try_acquire(None).unwrap();
+        let guard = tracker.try_acquire(None).expect("should acquire connection");
 
         assert!(guard.add_stream());
         assert!(guard.add_stream());
@@ -392,8 +392,8 @@ mod tests {
     fn tracker_list_connections() {
         let tracker = ConnectionTracker::new(ConnectionLimits::default());
 
-        let _g1 = tracker.try_acquire(None).unwrap();
-        let _g2 = tracker.try_acquire(None).unwrap();
+        let _g1 = tracker.try_acquire(None).expect("should acquire first");
+        let _g2 = tracker.try_acquire(None).expect("should acquire second");
 
         let connections = tracker.list_connections();
         assert_eq!(connections.len(), 2);

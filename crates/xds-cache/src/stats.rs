@@ -122,7 +122,10 @@ mod tests {
         assert_eq!(stats.snapshots_set(), 1);
         assert_eq!(stats.snapshot_hits(), 2);
         assert_eq!(stats.snapshot_misses(), 1);
-        assert!((stats.hit_rate() - 0.666).abs() < 0.01);
+        // 2 hits / 3 total = 2/3 ≈ 0.6667
+        let expected = 2.0_f64 / 3.0;
+        assert!((stats.hit_rate() - expected).abs() < f64::EPSILON * 10.0,
+            "hit_rate {} should be approximately {}", stats.hit_rate(), expected);
     }
 
     #[test]

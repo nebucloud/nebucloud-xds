@@ -90,6 +90,7 @@ pub mod reflection;
 pub mod shutdown;
 mod sotw;
 mod stream;
+pub mod utils;
 
 #[cfg(test)]
 mod protocol_tests;

@@ -304,7 +304,7 @@ mod tests {
         });
 
         // Wait for signal
-        rx.changed().await.unwrap();
+        rx.changed().await.expect("should receive shutdown signal");
         assert!(controller.is_shutdown());
     }
 
@@ -327,7 +327,7 @@ mod tests {
         drop(guard);
 
         // Shutdown should complete
-        let result = handle.await.unwrap();
+        let result = handle.await.expect("shutdown task should complete");
         assert!(result);
     }
 
