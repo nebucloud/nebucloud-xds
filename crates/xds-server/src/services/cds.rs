@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -17,11 +16,17 @@ use xds_core::{NodeHash, ResourceRegistry, TypeUrl};
 use crate::sotw::SotwHandler;
 use crate::stream::StreamContext;
 
-use super::ads::{DiscoveryRequest, DiscoveryResponse};
+// Re-export the data-plane-api types
+pub use data_plane_api::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
+pub use data_plane_api::envoy::service::cluster::v3::cluster_discovery_service_server::{
+    ClusterDiscoveryService, ClusterDiscoveryServiceServer,
+};
+pub use data_plane_api::envoy::service::discovery::v3::{
+    DeltaDiscoveryRequest, DeltaDiscoveryResponse,
+};
 
 /// Cluster Discovery Service.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct CdsService {
     /// Shared cache.
     cache: Arc<ShardedCache>,
@@ -48,34 +53,62 @@ impl CdsService {
         TypeUrl::CLUSTER
     }
 
+    /// Get a reference to the cache.
+    #[allow(dead_code)]
+    pub fn cache(&self) -> &ShardedCache {
+        &self.cache
+    }
+
+    /// Get a reference to the registry.
+    #[allow(dead_code)]
+    pub fn registry(&self) -> &ResourceRegistry {
+        &self.registry
+    }
+
     /// Convert this service into a tonic service for use with Server::add_service.
-    pub fn into_service(self) -> CdsServiceServer {
-        CdsServiceServer { inner: self }
+    pub fn into_service(self) -> ClusterDiscoveryServiceServer<Self> {
+        ClusterDiscoveryServiceServer::new(self)
+    }
+
+    /// Convert a SotW response to a proto DiscoveryResponse.
+    fn convert_response(
+        &self,
+        response: crate::sotw::SotwResponse,
+    ) -> DiscoveryResponse {
+        use data_plane_api::google::protobuf::Any;
+
+        let resources: Vec<Any> = response
+            .resources
+            .iter()
+            .filter_map(|r| {
+                r.encode().ok().map(|encoded| Any {
+                    type_url: encoded.type_url.clone(),
+                    value: encoded.value.clone(),
+                })
+            })
+            .collect();
+
+        DiscoveryResponse {
+            version_info: response.version_info,
+            resources,
+            type_url: TypeUrl::CLUSTER.to_string(),
+            nonce: response.nonce,
+            canary: false,
+            control_plane: None,
+            resource_errors: vec![],
+        }
     }
 }
 
-/// Trait for CDS service implementation.
-#[async_trait]
-pub trait ClusterDiscoveryService: Send + Sync + 'static {
-    /// Server streaming response type.
-    type StreamClustersStream: Stream<Item = Result<DiscoveryResponse, Status>> + Send + 'static;
+/// Response stream type for CDS.
+pub type CdsResponseStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
 
-    /// Stream clusters to the client.
-    async fn stream_clusters(
-        &self,
-        request: Request<Streaming<DiscoveryRequest>>,
-    ) -> Result<Response<Self::StreamClustersStream>, Status>;
-
-    /// Fetch clusters (unary RPC).
-    async fn fetch_clusters(
-        &self,
-        request: Request<DiscoveryRequest>,
-    ) -> Result<Response<DiscoveryResponse>, Status>;
-}
+/// Delta response stream type for CDS.
+pub type CdsDeltaResponseStream = ReceiverStream<Result<DeltaDiscoveryResponse, Status>>;
 
 #[async_trait]
 impl ClusterDiscoveryService for CdsService {
-    type StreamClustersStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
+    type StreamClustersStream = CdsResponseStream;
 
     #[instrument(skip(self, request), name = "cds_stream")]
     async fn stream_clusters(
@@ -85,7 +118,7 @@ impl ClusterDiscoveryService for CdsService {
         let mut stream = request.into_inner();
         let (tx, rx) = mpsc::channel(16);
 
-        let handler = Arc::clone(&self.sotw_handler);
+        let service = self.clone();
         let mut ctx = StreamContext::new();
 
         info!(stream = %ctx.id(), "CDS stream started");
@@ -122,7 +155,7 @@ impl ClusterDiscoveryService for CdsService {
                         };
 
                         // Process request
-                        match handler.process_request(
+                        match service.sotw_handler.process_request(
                             &ctx,
                             TypeUrl::CLUSTER.into(),
                             &request.version_info,
@@ -130,18 +163,7 @@ impl ClusterDiscoveryService for CdsService {
                             hash,
                         ) {
                             Ok(Some(response)) => {
-                                let discovery_response = DiscoveryResponse {
-                                    version_info: response.version_info,
-                                    resources: response
-                                        .resources
-                                        .iter()
-                                        .filter_map(|r| r.encode().ok())
-                                        .collect(),
-                                    type_url: TypeUrl::CLUSTER.to_string(),
-                                    nonce: response.nonce,
-                                    canary: false,
-                                    control_plane: None,
-                                };
+                                let discovery_response = service.convert_response(response);
                                 if tx.send(Ok(discovery_response)).await.is_err() {
                                     break;
                                 }
@@ -161,6 +183,43 @@ impl ClusterDiscoveryService for CdsService {
             }
 
             info!(stream = %ctx.id(), "CDS stream ended");
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    type DeltaClustersStream = CdsDeltaResponseStream;
+
+    #[instrument(skip(self, request), name = "cds_delta_stream")]
+    async fn delta_clusters(
+        &self,
+        request: Request<Streaming<DeltaDiscoveryRequest>>,
+    ) -> Result<Response<Self::DeltaClustersStream>, Status> {
+        let mut stream = request.into_inner();
+        let (tx, rx) = mpsc::channel(16);
+
+        let ctx = StreamContext::new();
+        info!(stream = %ctx.id(), "Delta CDS stream started");
+
+        tokio::spawn(async move {
+            while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
+                match result {
+                    Ok(request) => {
+                        debug!(
+                            stream = %ctx.id(),
+                            type_url = %request.type_url,
+                            "delta CDS request received (not yet implemented)"
+                        );
+                    }
+                    Err(e) => {
+                        error!(stream = %ctx.id(), error = %e, "delta stream error");
+                        break;
+                    }
+                }
+            }
+
+            info!(stream = %ctx.id(), "Delta CDS stream ended");
+            drop(tx);
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
@@ -194,66 +253,8 @@ impl ClusterDiscoveryService for CdsService {
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("no clusters available"))?;
 
-        Ok(Response::new(DiscoveryResponse {
-            version_info: response.version_info,
-            resources: response
-                .resources
-                .iter()
-                .filter_map(|r| r.encode().ok())
-                .collect(),
-            type_url: TypeUrl::CLUSTER.to_string(),
-            nonce: response.nonce,
-            canary: false,
-            control_plane: None,
-        }))
+        Ok(Response::new(self.convert_response(response)))
     }
-}
-
-/// Server wrapper for CdsService.
-#[derive(Debug, Clone)]
-pub struct CdsServiceServer {
-    #[allow(dead_code)]
-    inner: CdsService,
-}
-
-impl CdsServiceServer {
-    /// Create a new server wrapper.
-    pub fn new(service: CdsService) -> Self {
-        Self { inner: service }
-    }
-}
-
-impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for CdsServiceServer {
-    type Response = http::Response<tonic::body::BoxBody>;
-    type Error = std::convert::Infallible;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
-
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        let path = req.uri().path().to_string();
-        tracing::warn!(
-            path = %path,
-            "CDS service called but proto integration not yet complete"
-        );
-        Box::pin(async move {
-            let status = tonic::Status::unimplemented(
-                "CDS service requires integration with data-plane-api generated types"
-            );
-            Ok(status.into_http())
-        })
-    }
-}
-
-impl tonic::server::NamedService for CdsServiceServer {
-    const NAME: &'static str = "envoy.service.cluster.v3.ClusterDiscoveryService";
 }
 
 #[cfg(test)]

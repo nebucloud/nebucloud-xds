@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -17,6 +16,14 @@ use xds_core::{NodeHash, ResourceRegistry, TypeUrl};
 
 use crate::sotw::{SotwHandler, SotwResponse};
 use crate::stream::StreamContext;
+
+// Re-export the data-plane-api types for external use
+pub use data_plane_api::envoy::service::discovery::v3::{
+    DeltaDiscoveryRequest, DeltaDiscoveryResponse, DiscoveryRequest, DiscoveryResponse,
+};
+pub use data_plane_api::envoy::service::discovery::v3::aggregated_discovery_service_server::{
+    AggregatedDiscoveryService, AggregatedDiscoveryServiceServer,
+};
 
 /// Configuration for the ADS service.
 #[derive(Debug, Clone)]
@@ -99,9 +106,9 @@ impl AdsService {
 
     /// Convert this service into a tonic service for use with Server::add_service.
     ///
-    /// This creates a service that can be added to a tonic router.
-    pub fn into_service(self) -> AdsServiceServer {
-        AdsServiceServer { inner: self }
+    /// This creates a properly typed gRPC service using the data-plane-api generated server.
+    pub fn into_service(self) -> AggregatedDiscoveryServiceServer<Self> {
+        AggregatedDiscoveryServiceServer::new(self)
     }
 
     /// Process an incoming SotW discovery request.
@@ -151,158 +158,39 @@ impl AdsService {
         }
     }
 
-    /// Convert internal SotW response to discovery response.
+    /// Convert internal SotW response to proto DiscoveryResponse.
     #[allow(clippy::result_large_err)]
     fn convert_sotw_response(&self, response: SotwResponse) -> Result<DiscoveryResponse, Status> {
-        let resources: Result<Vec<prost_types::Any>, _> = response
+        use data_plane_api::google::protobuf::Any;
+
+        let resources: Vec<Any> = response
             .resources
             .iter()
-            .map(|r| {
-                r.encode()
-                    .map_err(|e| Status::internal(format!("Failed to encode resource: {}", e)))
+            .filter_map(|r| {
+                r.encode().ok().map(|encoded| Any {
+                    type_url: encoded.type_url.clone(),
+                    value: encoded.value.clone(),
+                })
             })
             .collect();
 
         Ok(DiscoveryResponse {
             version_info: response.version_info,
-            resources: resources?,
+            resources,
             type_url: response.type_url.to_string(),
             nonce: response.nonce,
             canary: false,
             control_plane: None,
+            resource_errors: vec![],
         })
     }
-}
-
-/// Discovery request for SotW protocol.
-#[derive(Debug, Clone, Default)]
-pub struct DiscoveryRequest {
-    /// Version info from the last response.
-    pub version_info: String,
-    /// Node information.
-    pub node: Option<Node>,
-    /// Requested resource names.
-    pub resource_names: Vec<String>,
-    /// Type URL of requested resources.
-    pub type_url: String,
-    /// Nonce from the last response.
-    pub response_nonce: String,
-    /// Error details if this is a NACK.
-    pub error_detail: Option<String>,
-}
-
-/// Discovery response for SotW protocol.
-#[derive(Debug, Clone, Default)]
-pub struct DiscoveryResponse {
-    /// Version of this response.
-    pub version_info: String,
-    /// Resources.
-    pub resources: Vec<prost_types::Any>,
-    /// Whether this is a canary response.
-    pub canary: bool,
-    /// Type URL of the resources.
-    pub type_url: String,
-    /// Unique nonce for this response.
-    pub nonce: String,
-    /// Control plane identifier.
-    pub control_plane: Option<ControlPlane>,
-}
-
-/// Node information.
-#[derive(Debug, Clone, Default)]
-pub struct Node {
-    /// Node identifier.
-    pub id: String,
-    /// Cluster the node belongs to.
-    pub cluster: String,
-}
-
-/// Control plane identifier.
-#[derive(Debug, Clone, Default)]
-pub struct ControlPlane {
-    /// Identifier.
-    pub identifier: String,
 }
 
 /// Response stream type for ADS.
 pub type AdsResponseStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
 
-/// Trait for ADS service implementation.
-///
-/// This trait defines the interface that the generated tonic code expects.
-/// Once we have proper proto generation, this will be replaced by the
-/// generated trait.
-#[async_trait]
-pub trait AggregatedDiscoveryService: Send + Sync + 'static {
-    /// Server streaming response type for StreamAggregatedResources.
-    type StreamAggregatedResourcesStream: Stream<Item = Result<DiscoveryResponse, Status>>
-        + Send
-        + 'static;
-
-    /// Bidirectional streaming RPC for xDS.
-    async fn stream_aggregated_resources(
-        &self,
-        request: Request<Streaming<DiscoveryRequest>>,
-    ) -> Result<Response<Self::StreamAggregatedResourcesStream>, Status>;
-
-    /// Server streaming response type for DeltaAggregatedResources.
-    type DeltaAggregatedResourcesStream: Stream<Item = Result<DeltaDiscoveryResponse, Status>>
-        + Send
-        + 'static;
-
-    /// Bidirectional streaming RPC for delta xDS.
-    async fn delta_aggregated_resources(
-        &self,
-        request: Request<Streaming<DeltaDiscoveryRequest>>,
-    ) -> Result<Response<Self::DeltaAggregatedResourcesStream>, Status>;
-}
-
-/// Delta discovery request.
-#[derive(Debug, Clone, Default)]
-pub struct DeltaDiscoveryRequest {
-    /// Node information.
-    pub node: Option<Node>,
-    /// Type URL of requested resources.
-    pub type_url: String,
-    /// Resources to subscribe to.
-    pub resource_names_subscribe: Vec<String>,
-    /// Resources to unsubscribe from.
-    pub resource_names_unsubscribe: Vec<String>,
-    /// Initial resource versions.
-    pub initial_resource_versions: std::collections::HashMap<String, String>,
-    /// Nonce from the last response.
-    pub response_nonce: String,
-    /// Error details if this is a NACK.
-    pub error_detail: Option<String>,
-}
-
-/// Delta discovery response.
-#[derive(Debug, Clone, Default)]
-pub struct DeltaDiscoveryResponse {
-    /// System version info.
-    pub system_version_info: String,
-    /// Updated resources.
-    pub resources: Vec<Resource>,
-    /// Type URL of the resources.
-    pub type_url: String,
-    /// Removed resource names.
-    pub removed_resources: Vec<String>,
-    /// Unique nonce for this response.
-    pub nonce: String,
-    /// Control plane identifier.
-    pub control_plane: Option<ControlPlane>,
-}
-
-/// A resource in a delta response.
-#[derive(Debug, Clone, Default)]
-pub struct Resource {
-    /// Resource name.
-    pub name: String,
-    /// Resource version.
-    pub version: String,
-    /// The resource.
-    pub resource: Option<prost_types::Any>,
-}
+/// Delta response stream type for ADS.
+pub type AdsDeltaResponseStream = ReceiverStream<Result<DeltaDiscoveryResponse, Status>>;
 
 #[async_trait]
 impl AggregatedDiscoveryService for AdsService {
@@ -349,6 +237,12 @@ impl AggregatedDiscoveryService for AdsService {
                             }
                         };
 
+                        // Extract error detail from the proto message
+                        let error_detail = request
+                            .error_detail
+                            .as_ref()
+                            .map(|e| e.message.as_str());
+
                         // Process the request
                         match service.process_sotw_request(
                             &ctx,
@@ -357,7 +251,7 @@ impl AggregatedDiscoveryService for AdsService {
                             &request.resource_names,
                             hash,
                             &request.response_nonce,
-                            request.error_detail.as_deref(),
+                            error_detail,
                         ) {
                             Ok(Some(response)) => {
                                 if tx.send(Ok(response)).await.is_err() {
@@ -394,7 +288,7 @@ impl AggregatedDiscoveryService for AdsService {
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 
-    type DeltaAggregatedResourcesStream = ReceiverStream<Result<DeltaDiscoveryResponse, Status>>;
+    type DeltaAggregatedResourcesStream = AdsDeltaResponseStream;
 
     #[instrument(skip(self, request), name = "ads_delta_stream")]
     async fn delta_aggregated_resources(
@@ -432,77 +326,6 @@ impl AggregatedDiscoveryService for AdsService {
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
-}
-
-/// Server wrapper for AdsService that implements tonic service traits.
-///
-/// This provides the gRPC service implementation that can be added to a tonic router.
-#[derive(Debug, Clone)]
-pub struct AdsServiceServer {
-    inner: AdsService,
-}
-
-impl AdsServiceServer {
-    /// Create a new server wrapper.
-    pub fn new(service: AdsService) -> Self {
-        Self { inner: service }
-    }
-
-    /// Get a reference to the inner service.
-    pub fn inner(&self) -> &AdsService {
-        &self.inner
-    }
-}
-
-// TODO: Integrate with data-plane-api generated types
-//
-// This implementation currently uses custom message types (DiscoveryRequest, etc.)
-// rather than the protobuf-generated types from data-plane-api. To enable proper
-// gRPC routing, we need to:
-//
-// 1. Add `data-plane-api` as a dependency
-// 2. Implement conversion between our types and the proto types  
-// 3. Use the generated `AggregatedDiscoveryServiceServer` from tonic-build
-//
-// For now, the `AdsService` implements our custom `AggregatedDiscoveryService` trait
-// which can be used directly for testing and when integrated with the generated server.
-
-impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for AdsServiceServer {
-    type Response = http::Response<tonic::body::BoxBody>;
-    type Error = std::convert::Infallible;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
-
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        // Log the request path for debugging
-        let path = req.uri().path().to_string();
-        tracing::warn!(
-            path = %path,
-            "ADS service called but proto integration not yet complete - use data-plane-api generated server"
-        );
-        
-        // Return proper gRPC UNIMPLEMENTED status
-        // This allows clients to understand the service exists but method isn't ready
-        Box::pin(async move {
-            let status = tonic::Status::unimplemented(
-                "ADS service requires integration with data-plane-api generated types. \
-                 See xds-server/src/services/ads.rs for migration instructions."
-            );
-            Ok(status.into_http())
-        })
-    }
-}
-
-impl tonic::server::NamedService for AdsServiceServer {
-    const NAME: &'static str = "envoy.service.discovery.v3.AggregatedDiscoveryService";
 }
 
 #[cfg(test)]

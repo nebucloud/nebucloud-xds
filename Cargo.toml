@@ -18,12 +18,14 @@ members = [
     
     # Integration tests
     "tests/integration",
+    
+    # Proto types (requires protoc)
+    "data-plane-api",
 ]
 
 # Exclude legacy crates that need protoc
 exclude = [
     "rust-control-plane",
-    "data-plane-api",
     "test-xds",
 ]
 

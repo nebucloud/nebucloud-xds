@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -17,11 +16,17 @@ use xds_core::{NodeHash, ResourceRegistry, TypeUrl};
 use crate::sotw::SotwHandler;
 use crate::stream::StreamContext;
 
-use super::ads::{DiscoveryRequest, DiscoveryResponse};
+// Re-export the data-plane-api types
+pub use data_plane_api::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
+pub use data_plane_api::envoy::service::listener::v3::listener_discovery_service_server::{
+    ListenerDiscoveryService, ListenerDiscoveryServiceServer,
+};
+pub use data_plane_api::envoy::service::discovery::v3::{
+    DeltaDiscoveryRequest, DeltaDiscoveryResponse,
+};
 
 /// Listener Discovery Service.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct LdsService {
     /// Shared cache.
     cache: Arc<ShardedCache>,
@@ -48,34 +53,62 @@ impl LdsService {
         TypeUrl::LISTENER
     }
 
+    /// Get a reference to the cache.
+    #[allow(dead_code)]
+    pub fn cache(&self) -> &ShardedCache {
+        &self.cache
+    }
+
+    /// Get a reference to the registry.
+    #[allow(dead_code)]
+    pub fn registry(&self) -> &ResourceRegistry {
+        &self.registry
+    }
+
     /// Convert this service into a tonic service for use with Server::add_service.
-    pub fn into_service(self) -> LdsServiceServer {
-        LdsServiceServer { inner: self }
+    pub fn into_service(self) -> ListenerDiscoveryServiceServer<Self> {
+        ListenerDiscoveryServiceServer::new(self)
+    }
+
+    /// Convert a SotW response to a proto DiscoveryResponse.
+    fn convert_response(
+        &self,
+        response: crate::sotw::SotwResponse,
+    ) -> DiscoveryResponse {
+        use data_plane_api::google::protobuf::Any;
+
+        let resources: Vec<Any> = response
+            .resources
+            .iter()
+            .filter_map(|r| {
+                r.encode().ok().map(|encoded| Any {
+                    type_url: encoded.type_url.clone(),
+                    value: encoded.value.clone(),
+                })
+            })
+            .collect();
+
+        DiscoveryResponse {
+            version_info: response.version_info,
+            resources,
+            type_url: TypeUrl::LISTENER.to_string(),
+            nonce: response.nonce,
+            canary: false,
+            control_plane: None,
+            resource_errors: vec![],
+        }
     }
 }
 
-/// Trait for LDS service implementation.
-#[async_trait]
-pub trait ListenerDiscoveryService: Send + Sync + 'static {
-    /// Server streaming response type.
-    type StreamListenersStream: Stream<Item = Result<DiscoveryResponse, Status>> + Send + 'static;
+/// Response stream type for LDS.
+pub type LdsResponseStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
 
-    /// Stream listeners to the client.
-    async fn stream_listeners(
-        &self,
-        request: Request<Streaming<DiscoveryRequest>>,
-    ) -> Result<Response<Self::StreamListenersStream>, Status>;
-
-    /// Fetch listeners (unary RPC).
-    async fn fetch_listeners(
-        &self,
-        request: Request<DiscoveryRequest>,
-    ) -> Result<Response<DiscoveryResponse>, Status>;
-}
+/// Delta response stream type for LDS.
+pub type LdsDeltaResponseStream = ReceiverStream<Result<DeltaDiscoveryResponse, Status>>;
 
 #[async_trait]
 impl ListenerDiscoveryService for LdsService {
-    type StreamListenersStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
+    type StreamListenersStream = LdsResponseStream;
 
     #[instrument(skip(self, request), name = "lds_stream")]
     async fn stream_listeners(
@@ -85,8 +118,7 @@ impl ListenerDiscoveryService for LdsService {
         let mut stream = request.into_inner();
         let (tx, rx) = mpsc::channel(16);
 
-        let handler = Arc::clone(&self.sotw_handler);
-        let type_url = TypeUrl::LISTENER;
+        let service = self.clone();
         let mut ctx = StreamContext::new();
 
         info!(stream = %ctx.id(), "LDS stream started");
@@ -97,6 +129,18 @@ impl ListenerDiscoveryService for LdsService {
             while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
                 match result {
                     Ok(request) => {
+                        // Validate type URL
+                        if !request.type_url.is_empty() && request.type_url != TypeUrl::LISTENER {
+                            error!(
+                                stream = %ctx.id(),
+                                expected = TypeUrl::LISTENER,
+                                got = %request.type_url,
+                                "invalid type URL for LDS"
+                            );
+                            continue;
+                        }
+
+                        // Extract node info
                         if node_hash.is_none() {
                             if let Some(ref node) = request.node {
                                 let hash = NodeHash::from_id(&node.id);
@@ -110,26 +154,16 @@ impl ListenerDiscoveryService for LdsService {
                             None => continue,
                         };
 
-                        match handler.process_request(
+                        // Process request
+                        match service.sotw_handler.process_request(
                             &ctx,
-                            type_url.into(),
+                            TypeUrl::LISTENER.into(),
                             &request.version_info,
                             &request.resource_names,
                             hash,
                         ) {
                             Ok(Some(response)) => {
-                                let discovery_response = DiscoveryResponse {
-                                    version_info: response.version_info,
-                                    resources: response
-                                        .resources
-                                        .iter()
-                                        .filter_map(|r| r.encode().ok())
-                                        .collect(),
-                                    type_url: type_url.to_string(),
-                                    nonce: response.nonce,
-                                    canary: false,
-                                    control_plane: None,
-                                };
+                                let discovery_response = service.convert_response(response);
                                 if tx.send(Ok(discovery_response)).await.is_err() {
                                     break;
                                 }
@@ -149,6 +183,43 @@ impl ListenerDiscoveryService for LdsService {
             }
 
             info!(stream = %ctx.id(), "LDS stream ended");
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    type DeltaListenersStream = LdsDeltaResponseStream;
+
+    #[instrument(skip(self, request), name = "lds_delta_stream")]
+    async fn delta_listeners(
+        &self,
+        request: Request<Streaming<DeltaDiscoveryRequest>>,
+    ) -> Result<Response<Self::DeltaListenersStream>, Status> {
+        let mut stream = request.into_inner();
+        let (tx, rx) = mpsc::channel(16);
+
+        let ctx = StreamContext::new();
+        info!(stream = %ctx.id(), "Delta LDS stream started");
+
+        tokio::spawn(async move {
+            while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
+                match result {
+                    Ok(request) => {
+                        debug!(
+                            stream = %ctx.id(),
+                            type_url = %request.type_url,
+                            "delta LDS request received (not yet implemented)"
+                        );
+                    }
+                    Err(e) => {
+                        error!(stream = %ctx.id(), error = %e, "delta stream error");
+                        break;
+                    }
+                }
+            }
+
+            info!(stream = %ctx.id(), "Delta LDS stream ended");
+            drop(tx);
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
@@ -182,66 +253,8 @@ impl ListenerDiscoveryService for LdsService {
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("no listeners available"))?;
 
-        Ok(Response::new(DiscoveryResponse {
-            version_info: response.version_info,
-            resources: response
-                .resources
-                .iter()
-                .filter_map(|r| r.encode().ok())
-                .collect(),
-            type_url: TypeUrl::LISTENER.to_string(),
-            nonce: response.nonce,
-            canary: false,
-            control_plane: None,
-        }))
+        Ok(Response::new(self.convert_response(response)))
     }
-}
-
-/// Server wrapper for LdsService.
-#[derive(Debug, Clone)]
-pub struct LdsServiceServer {
-    #[allow(dead_code)]
-    inner: LdsService,
-}
-
-impl LdsServiceServer {
-    /// Create a new server wrapper.
-    pub fn new(service: LdsService) -> Self {
-        Self { inner: service }
-    }
-}
-
-impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for LdsServiceServer {
-    type Response = http::Response<tonic::body::BoxBody>;
-    type Error = std::convert::Infallible;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
-
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        let path = req.uri().path().to_string();
-        tracing::warn!(
-            path = %path,
-            "LDS service called but proto integration not yet complete"
-        );
-        Box::pin(async move {
-            let status = tonic::Status::unimplemented(
-                "LDS service requires integration with data-plane-api generated types"
-            );
-            Ok(status.into_http())
-        })
-    }
-}
-
-impl tonic::server::NamedService for LdsServiceServer {
-    const NAME: &'static str = "envoy.service.listener.v3.ListenerDiscoveryService";
 }
 
 #[cfg(test)]

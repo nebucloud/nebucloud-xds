@@ -19,3 +19,6 @@
 [submodule "data-plane-api/client_model"]
 	path = data-plane-api/client_model
 	url = https://github.com/prometheus/client_model.git
+[submodule "data-plane-api/cel-spec"]
+	path = data-plane-api/cel-spec
+	url = https://github.com/google/cel-spec.git

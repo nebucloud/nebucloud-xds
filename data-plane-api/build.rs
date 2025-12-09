@@ -25,6 +25,7 @@ fn main() -> io::Result<()> {
                 "opencensus-proto/src",
                 "opentelemetry-proto",
                 "client_model",
+                "cel-spec/proto",
             ],
         )?;
     Ok(())

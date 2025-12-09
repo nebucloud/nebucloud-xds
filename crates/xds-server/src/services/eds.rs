@@ -1,11 +1,10 @@
 //! Endpoint Discovery Service (EDS) implementation.
 //!
-//! EDS provides endpoint (cluster member) configuration to Envoy proxies.
+//! EDS provides endpoint configuration to Envoy proxies.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::Stream;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
@@ -17,11 +16,17 @@ use xds_core::{NodeHash, ResourceRegistry, TypeUrl};
 use crate::sotw::SotwHandler;
 use crate::stream::StreamContext;
 
-use super::ads::{DiscoveryRequest, DiscoveryResponse};
+// Re-export the data-plane-api types
+pub use data_plane_api::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
+pub use data_plane_api::envoy::service::endpoint::v3::endpoint_discovery_service_server::{
+    EndpointDiscoveryService, EndpointDiscoveryServiceServer,
+};
+pub use data_plane_api::envoy::service::discovery::v3::{
+    DeltaDiscoveryRequest, DeltaDiscoveryResponse,
+};
 
 /// Endpoint Discovery Service.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct EdsService {
     /// Shared cache.
     cache: Arc<ShardedCache>,
@@ -48,34 +53,62 @@ impl EdsService {
         TypeUrl::ENDPOINT
     }
 
+    /// Get a reference to the cache.
+    #[allow(dead_code)]
+    pub fn cache(&self) -> &ShardedCache {
+        &self.cache
+    }
+
+    /// Get a reference to the registry.
+    #[allow(dead_code)]
+    pub fn registry(&self) -> &ResourceRegistry {
+        &self.registry
+    }
+
     /// Convert this service into a tonic service for use with Server::add_service.
-    pub fn into_service(self) -> EdsServiceServer {
-        EdsServiceServer { inner: self }
+    pub fn into_service(self) -> EndpointDiscoveryServiceServer<Self> {
+        EndpointDiscoveryServiceServer::new(self)
+    }
+
+    /// Convert a SotW response to a proto DiscoveryResponse.
+    fn convert_response(
+        &self,
+        response: crate::sotw::SotwResponse,
+    ) -> DiscoveryResponse {
+        use data_plane_api::google::protobuf::Any;
+
+        let resources: Vec<Any> = response
+            .resources
+            .iter()
+            .filter_map(|r| {
+                r.encode().ok().map(|encoded| Any {
+                    type_url: encoded.type_url.clone(),
+                    value: encoded.value.clone(),
+                })
+            })
+            .collect();
+
+        DiscoveryResponse {
+            version_info: response.version_info,
+            resources,
+            type_url: TypeUrl::ENDPOINT.to_string(),
+            nonce: response.nonce,
+            canary: false,
+            control_plane: None,
+            resource_errors: vec![],
+        }
     }
 }
 
-/// Trait for EDS service implementation.
-#[async_trait]
-pub trait EndpointDiscoveryService: Send + Sync + 'static {
-    /// Server streaming response type.
-    type StreamEndpointsStream: Stream<Item = Result<DiscoveryResponse, Status>> + Send + 'static;
+/// Response stream type for EDS.
+pub type EdsResponseStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
 
-    /// Stream endpoints to the client.
-    async fn stream_endpoints(
-        &self,
-        request: Request<Streaming<DiscoveryRequest>>,
-    ) -> Result<Response<Self::StreamEndpointsStream>, Status>;
-
-    /// Fetch endpoints (unary RPC).
-    async fn fetch_endpoints(
-        &self,
-        request: Request<DiscoveryRequest>,
-    ) -> Result<Response<DiscoveryResponse>, Status>;
-}
+/// Delta response stream type for EDS.
+pub type EdsDeltaResponseStream = ReceiverStream<Result<DeltaDiscoveryResponse, Status>>;
 
 #[async_trait]
 impl EndpointDiscoveryService for EdsService {
-    type StreamEndpointsStream = ReceiverStream<Result<DiscoveryResponse, Status>>;
+    type StreamEndpointsStream = EdsResponseStream;
 
     #[instrument(skip(self, request), name = "eds_stream")]
     async fn stream_endpoints(
@@ -85,8 +118,7 @@ impl EndpointDiscoveryService for EdsService {
         let mut stream = request.into_inner();
         let (tx, rx) = mpsc::channel(16);
 
-        let handler = Arc::clone(&self.sotw_handler);
-        let type_url = TypeUrl::ENDPOINT;
+        let service = self.clone();
         let mut ctx = StreamContext::new();
 
         info!(stream = %ctx.id(), "EDS stream started");
@@ -97,6 +129,18 @@ impl EndpointDiscoveryService for EdsService {
             while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
                 match result {
                     Ok(request) => {
+                        // Validate type URL
+                        if !request.type_url.is_empty() && request.type_url != TypeUrl::ENDPOINT {
+                            error!(
+                                stream = %ctx.id(),
+                                expected = TypeUrl::ENDPOINT,
+                                got = %request.type_url,
+                                "invalid type URL for EDS"
+                            );
+                            continue;
+                        }
+
+                        // Extract node info
                         if node_hash.is_none() {
                             if let Some(ref node) = request.node {
                                 let hash = NodeHash::from_id(&node.id);
@@ -110,26 +154,16 @@ impl EndpointDiscoveryService for EdsService {
                             None => continue,
                         };
 
-                        match handler.process_request(
+                        // Process request
+                        match service.sotw_handler.process_request(
                             &ctx,
-                            type_url.into(),
+                            TypeUrl::ENDPOINT.into(),
                             &request.version_info,
                             &request.resource_names,
                             hash,
                         ) {
                             Ok(Some(response)) => {
-                                let discovery_response = DiscoveryResponse {
-                                    version_info: response.version_info,
-                                    resources: response
-                                        .resources
-                                        .iter()
-                                        .filter_map(|r| r.encode().ok())
-                                        .collect(),
-                                    type_url: type_url.to_string(),
-                                    nonce: response.nonce,
-                                    canary: false,
-                                    control_plane: None,
-                                };
+                                let discovery_response = service.convert_response(response);
                                 if tx.send(Ok(discovery_response)).await.is_err() {
                                     break;
                                 }
@@ -149,6 +183,43 @@ impl EndpointDiscoveryService for EdsService {
             }
 
             info!(stream = %ctx.id(), "EDS stream ended");
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
+    type DeltaEndpointsStream = EdsDeltaResponseStream;
+
+    #[instrument(skip(self, request), name = "eds_delta_stream")]
+    async fn delta_endpoints(
+        &self,
+        request: Request<Streaming<DeltaDiscoveryRequest>>,
+    ) -> Result<Response<Self::DeltaEndpointsStream>, Status> {
+        let mut stream = request.into_inner();
+        let (tx, rx) = mpsc::channel(16);
+
+        let ctx = StreamContext::new();
+        info!(stream = %ctx.id(), "Delta EDS stream started");
+
+        tokio::spawn(async move {
+            while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
+                match result {
+                    Ok(request) => {
+                        debug!(
+                            stream = %ctx.id(),
+                            type_url = %request.type_url,
+                            "delta EDS request received (not yet implemented)"
+                        );
+                    }
+                    Err(e) => {
+                        error!(stream = %ctx.id(), error = %e, "delta stream error");
+                        break;
+                    }
+                }
+            }
+
+            info!(stream = %ctx.id(), "Delta EDS stream ended");
+            drop(tx);
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
@@ -182,66 +253,8 @@ impl EndpointDiscoveryService for EdsService {
             .map_err(|e| Status::internal(e.to_string()))?
             .ok_or_else(|| Status::not_found("no endpoints available"))?;
 
-        Ok(Response::new(DiscoveryResponse {
-            version_info: response.version_info,
-            resources: response
-                .resources
-                .iter()
-                .filter_map(|r| r.encode().ok())
-                .collect(),
-            type_url: TypeUrl::ENDPOINT.to_string(),
-            nonce: response.nonce,
-            canary: false,
-            control_plane: None,
-        }))
+        Ok(Response::new(self.convert_response(response)))
     }
-}
-
-/// Server wrapper for EdsService.
-#[derive(Debug, Clone)]
-pub struct EdsServiceServer {
-    #[allow(dead_code)]
-    inner: EdsService,
-}
-
-impl EdsServiceServer {
-    /// Create a new server wrapper.
-    pub fn new(service: EdsService) -> Self {
-        Self { inner: service }
-    }
-}
-
-impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for EdsServiceServer {
-    type Response = http::Response<tonic::body::BoxBody>;
-    type Error = std::convert::Infallible;
-    type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
-    >;
-
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        let path = req.uri().path().to_string();
-        tracing::warn!(
-            path = %path,
-            "EDS service called but proto integration not yet complete"
-        );
-        Box::pin(async move {
-            let status = tonic::Status::unimplemented(
-                "EDS service requires integration with data-plane-api generated types"
-            );
-            Ok(status.into_http())
-        })
-    }
-}
-
-impl tonic::server::NamedService for EdsServiceServer {
-    const NAME: &'static str = "envoy.service.endpoint.v3.EndpointDiscoveryService";
 }
 
 #[cfg(test)]

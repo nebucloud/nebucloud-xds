@@ -593,6 +593,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-plane-api"
+version = "0.2.0"
+dependencies = [
+ "glob",
+ "prost",
+ "prost-build",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3324,6 +3335,7 @@ name = "xds-server"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "data-plane-api",
  "futures",
  "http",
  "metrics",
