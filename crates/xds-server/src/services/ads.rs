@@ -92,6 +92,11 @@ impl AdsService {
         &self.registry
     }
 
+    /// Get a reference to the configuration.
+    pub fn config(&self) -> &AdsConfig {
+        &self.config
+    }
+
     /// Process an incoming SotW discovery request.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip(self, ctx), fields(stream = %ctx.id()))]
