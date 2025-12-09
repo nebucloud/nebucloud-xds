@@ -7,11 +7,8 @@
 //! - Route Discovery Service (RDS)
 //! - Endpoint Discovery Service (EDS)
 //! - Secret Discovery Service (SDS)
-//!
-//! Note: These services require the `xds-types` crate for protobuf types.
 
-// Placeholder for gRPC service implementations
-// These will be implemented when xds-types provides the generated protobuf types
+pub mod ads;
 
 use std::sync::Arc;
 
@@ -21,6 +18,8 @@ use xds_core::ResourceRegistry;
 use crate::config::ServerConfig;
 use crate::delta::DeltaHandler;
 use crate::sotw::SotwHandler;
+
+pub use ads::{AdsConfig, AdsService, AggregatedDiscoveryService};
 
 /// Shared state for all xDS services.
 #[derive(Debug, Clone)]
