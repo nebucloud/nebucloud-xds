@@ -141,7 +141,7 @@ impl ConnectionTracker {
         self.inner
             .per_ip
             .read()
-            .unwrap()
+            .expect("per_ip lock poisoned")
             .get(&ip)
             .copied()
             .unwrap_or(0)
@@ -165,7 +165,7 @@ impl ConnectionTracker {
         // Check per-IP limit if address is known
         if let Some(addr) = remote_addr {
             let ip = addr.ip();
-            let mut per_ip = self.inner.per_ip.write().unwrap();
+            let mut per_ip = self.inner.per_ip.write().expect("per_ip lock poisoned");
             let ip_count = per_ip.get(&ip).copied().unwrap_or(0);
 
             if ip_count >= self.inner.limits.max_per_ip {
@@ -194,7 +194,7 @@ impl ConnectionTracker {
             active_streams: 0,
         };
 
-        self.inner.connections.write().unwrap().insert(id, info);
+        self.inner.connections.write().expect("connections lock poisoned").insert(id, info);
 
         debug!(
             id = id,
@@ -215,7 +215,7 @@ impl ConnectionTracker {
         self.inner
             .connections
             .read()
-            .unwrap()
+            .expect("connections lock poisoned")
             .values()
             .cloned()
             .collect()
@@ -223,7 +223,7 @@ impl ConnectionTracker {
 
     /// Get information about a specific connection.
     pub fn get_connection(&self, id: u64) -> Option<ConnectionInfo> {
-        self.inner.connections.read().unwrap().get(&id).cloned()
+        self.inner.connections.read().expect("connections lock poisoned").get(&id).cloned()
     }
 
     fn release(&self, id: u64, remote_addr: Option<SocketAddr>) {
@@ -233,7 +233,7 @@ impl ConnectionTracker {
         // Decrement per-IP counter
         if let Some(addr) = remote_addr {
             let ip = addr.ip();
-            let mut per_ip = self.inner.per_ip.write().unwrap();
+            let mut per_ip = self.inner.per_ip.write().expect("per_ip lock poisoned");
             if let Some(count) = per_ip.get_mut(&ip) {
                 *count = count.saturating_sub(1);
                 if *count == 0 {
@@ -243,7 +243,7 @@ impl ConnectionTracker {
         }
 
         // Remove connection info
-        self.inner.connections.write().unwrap().remove(&id);
+        self.inner.connections.write().expect("connections lock poisoned").remove(&id);
 
         debug!(
             id = id,
@@ -277,7 +277,7 @@ impl ConnectionGuard {
 
     /// Increment the stream count for this connection.
     pub fn add_stream(&self) -> bool {
-        let mut connections = self.tracker.inner.connections.write().unwrap();
+        let mut connections = self.tracker.inner.connections.write().expect("connections lock poisoned");
         if let Some(info) = connections.get_mut(&self.id) {
             if info.active_streams >= self.tracker.inner.limits.max_streams_per_connection {
                 return false;
@@ -291,7 +291,7 @@ impl ConnectionGuard {
 
     /// Decrement the stream count for this connection.
     pub fn remove_stream(&self) {
-        let mut connections = self.tracker.inner.connections.write().unwrap();
+        let mut connections = self.tracker.inner.connections.write().expect("connections lock poisoned");
         if let Some(info) = connections.get_mut(&self.id) {
             info.active_streams = info.active_streams.saturating_sub(1);
         }

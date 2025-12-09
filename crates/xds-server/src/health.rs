@@ -83,35 +83,40 @@ impl HealthService {
 
     /// Set all xDS services as serving.
     pub async fn set_all_serving(&self) {
-        let mut reporter = self.reporter.lock().await;
-
-        // Set the main server as serving
-        reporter
-            .set_serving::<tonic_health::pb::health_server::HealthServer<
-                tonic_health::server::HealthService,
-            >>()
-            .await;
-
-        // Set all xDS services as serving
-        for service in &[
-            "envoy.service.discovery.v3.AggregatedDiscoveryService",
-            "envoy.service.cluster.v3.ClusterDiscoveryService",
-            "envoy.service.listener.v3.ListenerDiscoveryService",
-            "envoy.service.route.v3.RouteDiscoveryService",
-            "envoy.service.endpoint.v3.EndpointDiscoveryService",
-            "envoy.service.secret.v3.SecretDiscoveryService",
-            "xds",
-        ] {
-            reporter
-                .set_service_status(*service, tonic_health::ServingStatus::Serving)
-                .await;
-        }
+        self.set_all_status(tonic_health::ServingStatus::Serving).await;
     }
 
     /// Set all xDS services as not serving (for graceful shutdown).
     pub async fn set_all_not_serving(&self) {
+        self.set_all_status(tonic_health::ServingStatus::NotServing).await;
+    }
+
+    /// Set status for all known xDS services.
+    async fn set_all_status(&self, status: tonic_health::ServingStatus) {
         let mut reporter = self.reporter.lock().await;
-        for service in &[
+
+        // Set the main server status
+        if status == tonic_health::ServingStatus::Serving {
+            reporter
+                .set_serving::<tonic_health::pb::health_server::HealthServer<
+                    tonic_health::server::HealthService,
+                >>()
+                .await;
+        }
+
+        // Set all xDS services to the requested status
+        for service in Self::xds_service_names() {
+            reporter.set_service_status(service, status).await;
+        }
+    }
+
+    /// Get the list of xDS service names for health checking.
+    ///
+    /// This returns the standard Envoy xDS service names plus a generic "xds" entry.
+    /// These names match the gRPC service names used by Envoy clients.
+    #[inline]
+    pub const fn xds_service_names() -> &'static [&'static str] {
+        &[
             "envoy.service.discovery.v3.AggregatedDiscoveryService",
             "envoy.service.cluster.v3.ClusterDiscoveryService",
             "envoy.service.listener.v3.ListenerDiscoveryService",
@@ -119,11 +124,7 @@ impl HealthService {
             "envoy.service.endpoint.v3.EndpointDiscoveryService",
             "envoy.service.secret.v3.SecretDiscoveryService",
             "xds",
-        ] {
-            reporter
-                .set_service_status(*service, tonic_health::ServingStatus::NotServing)
-                .await;
-        }
+        ]
     }
 }
 

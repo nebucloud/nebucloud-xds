@@ -191,6 +191,48 @@ impl XdsServer {
         )
     }
 
+    /// Build the router with all xDS services configured.
+    ///
+    /// This is an internal helper to reduce duplication between serve methods.
+    async fn build_router(&self) -> (tonic::transport::server::Router, Option<HealthSvc>) {
+        let state = self.service_state();
+        let (ads, cds, lds, rds, eds, sds) = state.create_services();
+
+        // Build the server with configured options
+        let mut builder = Server::builder();
+
+        if let Some(interval) = self.config.keepalive_interval {
+            builder = builder.http2_keepalive_interval(Some(interval));
+        }
+        if let Some(timeout) = self.config.keepalive_timeout {
+            builder = builder.http2_keepalive_timeout(Some(timeout));
+        }
+        if let Some(max_streams) = self.config.max_concurrent_streams {
+            builder = builder.concurrency_limit_per_connection(max_streams as usize);
+        }
+
+        // Add all xDS services
+        let mut router = builder
+            .add_service(ads.into_service())
+            .add_service(cds.into_service())
+            .add_service(lds.into_service())
+            .add_service(rds.into_service())
+            .add_service(eds.into_service())
+            .add_service(sds.into_service());
+
+        // Add health service if enabled
+        let health = if self.config.enable_health {
+            let (health, health_svc) = HealthSvc::new();
+            router = router.add_service(health_svc);
+            health.set_all_serving().await;
+            Some(health)
+        } else {
+            None
+        };
+
+        (router, health)
+    }
+
     /// Start the server and listen on the given address.
     ///
     /// This method will:
@@ -210,46 +252,7 @@ impl XdsServer {
     pub async fn serve(self, addr: SocketAddr) -> Result<(), tonic::transport::Error> {
         info!(addr = %addr, "starting xDS server");
 
-        // Create service state
-        let state = self.service_state();
-        let (ads, cds, lds, rds, eds, sds) = state.create_services();
-
-        // Build the server
-        let mut builder = Server::builder();
-
-        // Configure keepalive if set
-        if let Some(interval) = self.config.keepalive_interval {
-            builder = builder.http2_keepalive_interval(Some(interval));
-        }
-        if let Some(timeout) = self.config.keepalive_timeout {
-            builder = builder.http2_keepalive_timeout(Some(timeout));
-        }
-        if let Some(max_streams) = self.config.max_concurrent_streams {
-            builder = builder.concurrency_limit_per_connection(max_streams as usize);
-        }
-
-        // Add services
-        let mut router = builder
-            .add_service(ads.into_service())
-            .add_service(cds.into_service())
-            .add_service(lds.into_service())
-            .add_service(rds.into_service())
-            .add_service(eds.into_service())
-            .add_service(sds.into_service());
-
-        // Add health service if enabled
-        let health = if self.config.enable_health {
-            let (health, health_svc) = HealthSvc::new();
-            router = router.add_service(health_svc);
-            // Set all services as serving
-            health.set_all_serving().await;
-            Some(health)
-        } else {
-            None
-        };
-
-        // Set up graceful shutdown
-        let _shutdown = self.shutdown.clone();
+        let (router, health) = self.build_router().await;
         let grace_period = self.config.grace_period;
 
         let serve_future = router.serve_with_shutdown(addr, async move {
@@ -280,39 +283,7 @@ impl XdsServer {
     ) -> Result<(), tonic::transport::Error> {
         info!(addr = %addr, "starting xDS server with custom shutdown");
 
-        let state = self.service_state();
-        let (ads, cds, lds, rds, eds, sds) = state.create_services();
-
-        let mut builder = Server::builder();
-
-        if let Some(interval) = self.config.keepalive_interval {
-            builder = builder.http2_keepalive_interval(Some(interval));
-        }
-        if let Some(timeout) = self.config.keepalive_timeout {
-            builder = builder.http2_keepalive_timeout(Some(timeout));
-        }
-        if let Some(max_streams) = self.config.max_concurrent_streams {
-            builder = builder.concurrency_limit_per_connection(max_streams as usize);
-        }
-
-        let mut router = builder
-            .add_service(ads.into_service())
-            .add_service(cds.into_service())
-            .add_service(lds.into_service())
-            .add_service(rds.into_service())
-            .add_service(eds.into_service())
-            .add_service(sds.into_service());
-
-        // Add health service if enabled
-        let health = if self.config.enable_health {
-            let (health, health_svc) = HealthSvc::new();
-            router = router.add_service(health_svc);
-            health.set_all_serving().await;
-            Some(health)
-        } else {
-            None
-        };
-
+        let (router, health) = self.build_router().await;
         let grace_period = self.config.grace_period;
 
         let serve_future = router.serve_with_shutdown(addr, async move {

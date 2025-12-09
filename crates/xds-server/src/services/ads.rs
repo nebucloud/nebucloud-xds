@@ -454,9 +454,18 @@ impl AdsServiceServer {
     }
 }
 
-// Note: In a full implementation, this would implement the tonic-generated
-// service trait. For now, we provide a placeholder that allows the server
-// to be composed with other services.
+// TODO: Integrate with data-plane-api generated types
+//
+// This implementation currently uses custom message types (DiscoveryRequest, etc.)
+// rather than the protobuf-generated types from data-plane-api. To enable proper
+// gRPC routing, we need to:
+//
+// 1. Add `data-plane-api` as a dependency
+// 2. Implement conversion between our types and the proto types  
+// 3. Use the generated `AggregatedDiscoveryServiceServer` from tonic-build
+//
+// For now, the `AdsService` implements our custom `AggregatedDiscoveryService` trait
+// which can be used directly for testing and when integrated with the generated server.
 
 impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for AdsServiceServer {
     type Response = http::Response<tonic::body::BoxBody>;
@@ -473,14 +482,21 @@ impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for AdsService
     }
 
     fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        // This is a placeholder - in production, this would route to the
-        // appropriate gRPC method based on the request path
-        let _ = req;
+        // Log the request path for debugging
+        let path = req.uri().path().to_string();
+        tracing::warn!(
+            path = %path,
+            "ADS service called but proto integration not yet complete - use data-plane-api generated server"
+        );
+        
+        // Return proper gRPC UNIMPLEMENTED status
+        // This allows clients to understand the service exists but method isn't ready
         Box::pin(async move {
-            Ok(http::Response::builder()
-                .status(http::StatusCode::NOT_IMPLEMENTED)
-                .body(tonic::body::empty_body())
-                .unwrap())
+            let status = tonic::Status::unimplemented(
+                "ADS service requires integration with data-plane-api generated types. \
+                 See xds-server/src/services/ads.rs for migration instructions."
+            );
+            Ok(status.into_http())
         })
     }
 }

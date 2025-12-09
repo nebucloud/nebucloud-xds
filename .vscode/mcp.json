@@ -2,9 +2,8 @@
   "servers": {
     "xds-mcp": {
       "type": "stdio",
-      "command": "cargo",
-      "args": ["run", "-p", "xds-mcp", "--quiet", "--", "--workspace", "${workspaceFolder}"],
-      "cwd": "${workspaceFolder}"
+      "command": "${workspaceFolder}/target/release/xds-mcp",
+      "args": ["--workspace", "${workspaceFolder}"]
     }
   }
 }

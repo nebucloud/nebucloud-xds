@@ -226,12 +226,16 @@ impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for RdsService
     }
 
     fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
-        let _ = req;
+        let path = req.uri().path().to_string();
+        tracing::warn!(
+            path = %path,
+            "RDS service called but proto integration not yet complete"
+        );
         Box::pin(async move {
-            Ok(http::Response::builder()
-                .status(http::StatusCode::NOT_IMPLEMENTED)
-                .body(tonic::body::empty_body())
-                .unwrap())
+            let status = tonic::Status::unimplemented(
+                "RDS service requires integration with data-plane-api generated types"
+            );
+            Ok(status.into_http())
         })
     }
 }
