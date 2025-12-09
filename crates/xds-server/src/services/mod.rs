@@ -9,6 +9,11 @@
 //! - Secret Discovery Service (SDS)
 
 pub mod ads;
+pub mod cds;
+pub mod eds;
+pub mod lds;
+pub mod rds;
+pub mod sds;
 
 use std::sync::Arc;
 
@@ -19,7 +24,13 @@ use crate::config::ServerConfig;
 use crate::delta::DeltaHandler;
 use crate::sotw::SotwHandler;
 
+// Re-export all services and traits
 pub use ads::{AdsConfig, AdsService, AggregatedDiscoveryService};
+pub use cds::{CdsService, ClusterDiscoveryService};
+pub use eds::{EdsService, EndpointDiscoveryService};
+pub use lds::{LdsService, ListenerDiscoveryService};
+pub use rds::{RdsService, RouteDiscoveryService};
+pub use sds::{SdsService, SecretDiscoveryService};
 
 /// Shared state for all xDS services.
 #[derive(Debug, Clone)]
@@ -54,21 +65,25 @@ impl ServiceState {
             delta,
         }
     }
-}
 
-// TODO: Implement tonic services when xds-types is available
-// The services will follow this pattern:
-//
-// pub struct AdsService {
-//     state: ServiceState,
-// }
-//
-// #[tonic::async_trait]
-// impl AggregatedDiscoveryService for AdsService {
-//     async fn stream_aggregated_resources(
-//         &self,
-//         request: tonic::Request<tonic::Streaming<DiscoveryRequest>>,
-//     ) -> Result<tonic::Response<Self::StreamAggregatedResourcesStream>, tonic::Status> {
-//         // Implementation
-//     }
-// }
+    /// Create all discovery services from this state.
+    pub fn create_services(
+        &self,
+    ) -> (
+        AdsService,
+        CdsService,
+        LdsService,
+        RdsService,
+        EdsService,
+        SdsService,
+    ) {
+        (
+            AdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            CdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            LdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            RdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            EdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            SdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+        )
+    }
+}
