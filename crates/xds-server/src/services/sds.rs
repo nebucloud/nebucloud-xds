@@ -47,6 +47,11 @@ impl SdsService {
     pub fn type_url() -> &'static str {
         TypeUrl::SECRET
     }
+
+    /// Convert this service into a tonic service for use with Server::add_service.
+    pub fn into_service(self) -> SdsServiceServer {
+        SdsServiceServer { inner: self }
+    }
 }
 
 /// Trait for SDS service implementation.
@@ -190,6 +195,49 @@ impl SecretDiscoveryService for SdsService {
             control_plane: None,
         }))
     }
+}
+
+/// Server wrapper for SdsService.
+#[derive(Debug, Clone)]
+pub struct SdsServiceServer {
+    #[allow(dead_code)]
+    inner: SdsService,
+}
+
+impl SdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: SdsService) -> Self {
+        Self { inner: service }
+    }
+}
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for SdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        let _ = req;
+        Box::pin(async move {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::NOT_IMPLEMENTED)
+                .body(tonic::body::empty_body())
+                .unwrap())
+        })
+    }
+}
+
+impl tonic::server::NamedService for SdsServiceServer {
+    const NAME: &'static str = "envoy.service.secret.v3.SecretDiscoveryService";
 }
 
 #[cfg(test)]

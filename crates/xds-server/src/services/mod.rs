@@ -25,12 +25,12 @@ use crate::delta::DeltaHandler;
 use crate::sotw::SotwHandler;
 
 // Re-export all services and traits
-pub use ads::{AdsConfig, AdsService, AggregatedDiscoveryService};
-pub use cds::{CdsService, ClusterDiscoveryService};
-pub use eds::{EdsService, EndpointDiscoveryService};
-pub use lds::{LdsService, ListenerDiscoveryService};
-pub use rds::{RdsService, RouteDiscoveryService};
-pub use sds::{SdsService, SecretDiscoveryService};
+pub use ads::{AdsConfig, AdsService, AdsServiceServer, AggregatedDiscoveryService};
+pub use cds::{CdsService, CdsServiceServer, ClusterDiscoveryService};
+pub use eds::{EdsService, EdsServiceServer, EndpointDiscoveryService};
+pub use lds::{LdsService, LdsServiceServer, ListenerDiscoveryService};
+pub use rds::{RdsService, RdsServiceServer, RouteDiscoveryService};
+pub use sds::{SdsService, SdsServiceServer, SecretDiscoveryService};
 
 /// Shared state for all xDS services.
 #[derive(Debug, Clone)]

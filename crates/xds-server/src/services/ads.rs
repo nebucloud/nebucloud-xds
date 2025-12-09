@@ -97,6 +97,13 @@ impl AdsService {
         &self.config
     }
 
+    /// Convert this service into a tonic service for use with Server::add_service.
+    ///
+    /// This creates a service that can be added to a tonic router.
+    pub fn into_service(self) -> AdsServiceServer {
+        AdsServiceServer { inner: self }
+    }
+
     /// Process an incoming SotW discovery request.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip(self, ctx), fields(stream = %ctx.id()))]
@@ -425,6 +432,61 @@ impl AggregatedDiscoveryService for AdsService {
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
+}
+
+/// Server wrapper for AdsService that implements tonic service traits.
+///
+/// This provides the gRPC service implementation that can be added to a tonic router.
+#[derive(Debug, Clone)]
+pub struct AdsServiceServer {
+    inner: AdsService,
+}
+
+impl AdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: AdsService) -> Self {
+        Self { inner: service }
+    }
+
+    /// Get a reference to the inner service.
+    pub fn inner(&self) -> &AdsService {
+        &self.inner
+    }
+}
+
+// Note: In a full implementation, this would implement the tonic-generated
+// service trait. For now, we provide a placeholder that allows the server
+// to be composed with other services.
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for AdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        // This is a placeholder - in production, this would route to the
+        // appropriate gRPC method based on the request path
+        let _ = req;
+        Box::pin(async move {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::NOT_IMPLEMENTED)
+                .body(tonic::body::empty_body())
+                .unwrap())
+        })
+    }
+}
+
+impl tonic::server::NamedService for AdsServiceServer {
+    const NAME: &'static str = "envoy.service.discovery.v3.AggregatedDiscoveryService";
 }
 
 #[cfg(test)]

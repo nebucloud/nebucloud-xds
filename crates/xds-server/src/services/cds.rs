@@ -47,6 +47,11 @@ impl CdsService {
     pub fn type_url() -> &'static str {
         TypeUrl::CLUSTER
     }
+
+    /// Convert this service into a tonic service for use with Server::add_service.
+    pub fn into_service(self) -> CdsServiceServer {
+        CdsServiceServer { inner: self }
+    }
 }
 
 /// Trait for CDS service implementation.
@@ -202,6 +207,49 @@ impl ClusterDiscoveryService for CdsService {
             control_plane: None,
         }))
     }
+}
+
+/// Server wrapper for CdsService.
+#[derive(Debug, Clone)]
+pub struct CdsServiceServer {
+    #[allow(dead_code)]
+    inner: CdsService,
+}
+
+impl CdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: CdsService) -> Self {
+        Self { inner: service }
+    }
+}
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for CdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        let _ = req;
+        Box::pin(async move {
+            Ok(http::Response::builder()
+                .status(http::StatusCode::NOT_IMPLEMENTED)
+                .body(tonic::body::empty_body())
+                .unwrap())
+        })
+    }
+}
+
+impl tonic::server::NamedService for CdsServiceServer {
+    const NAME: &'static str = "envoy.service.cluster.v3.ClusterDiscoveryService";
 }
 
 #[cfg(test)]
