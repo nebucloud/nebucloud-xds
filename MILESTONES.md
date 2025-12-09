@@ -11,7 +11,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | Milestone | Target | Status | Progress |
 |-----------|--------|--------|----------|
 | [M1: Foundation](#m1-foundation) | Week 1-2 | 🟢 Complete | 100% |
-| [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟡 In Progress | 87.5% |
+| [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟢 Complete | 100% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🔴 Not Started | 0% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🔴 Not Started | 0% |
 | [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🔴 Not Started | 0% |
@@ -65,13 +65,13 @@ This document tracks the milestones and progress for transforming the legacy rus
 | 13 | Build ShardedCache with DashMap | P0 | 8h | - | 🟢 |
 | 14 | Implement Watch and WatchManager | P0 | 4h | - | 🟢 |
 | 15 | Add Snapshot builder pattern | P1 | 3h | - | 🟢 |
-| 16 | Write unit tests for cache | P0 | 4h | - | 🔴 |
+| 16 | Write unit tests for cache | P0 | 4h | - | 🟢 |
 
 **Exit Criteria:**
-- [ ] No panics in error paths (remove all `.unwrap()` in production code)
-- [ ] DashMap-based cache passing stress tests
-- [ ] Watch notification system working
-- [ ] 80%+ test coverage for xds-core and xds-cache
+- [x] No panics in error paths (remove all `.unwrap()` in production code)
+- [x] DashMap-based cache passing stress tests
+- [x] Watch notification system working
+- [x] 80%+ test coverage for xds-core and xds-cache
 
 **Critical Fix:** Lock-across-await bug must be resolved (drop DashMap refs before any `.await`)
 
