@@ -39,6 +39,9 @@ mod delta;
 mod sotw;
 mod stream;
 
+#[cfg(test)]
+mod protocol_tests;
+
 // Re-export service modules
 pub mod services;
 
