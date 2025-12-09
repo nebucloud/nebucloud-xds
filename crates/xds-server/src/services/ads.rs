@@ -97,6 +97,13 @@ impl AdsService {
         &self.config
     }
 
+    /// Convert this service into a tonic service for use with Server::add_service.
+    ///
+    /// This creates a service that can be added to a tonic router.
+    pub fn into_service(self) -> AdsServiceServer {
+        AdsServiceServer { inner: self }
+    }
+
     /// Process an incoming SotW discovery request.
     #[allow(clippy::too_many_arguments)]
     #[instrument(skip(self, ctx), fields(stream = %ctx.id()))]
@@ -425,6 +432,77 @@ impl AggregatedDiscoveryService for AdsService {
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
+}
+
+/// Server wrapper for AdsService that implements tonic service traits.
+///
+/// This provides the gRPC service implementation that can be added to a tonic router.
+#[derive(Debug, Clone)]
+pub struct AdsServiceServer {
+    inner: AdsService,
+}
+
+impl AdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: AdsService) -> Self {
+        Self { inner: service }
+    }
+
+    /// Get a reference to the inner service.
+    pub fn inner(&self) -> &AdsService {
+        &self.inner
+    }
+}
+
+// TODO: Integrate with data-plane-api generated types
+//
+// This implementation currently uses custom message types (DiscoveryRequest, etc.)
+// rather than the protobuf-generated types from data-plane-api. To enable proper
+// gRPC routing, we need to:
+//
+// 1. Add `data-plane-api` as a dependency
+// 2. Implement conversion between our types and the proto types  
+// 3. Use the generated `AggregatedDiscoveryServiceServer` from tonic-build
+//
+// For now, the `AdsService` implements our custom `AggregatedDiscoveryService` trait
+// which can be used directly for testing and when integrated with the generated server.
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for AdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        // Log the request path for debugging
+        let path = req.uri().path().to_string();
+        tracing::warn!(
+            path = %path,
+            "ADS service called but proto integration not yet complete - use data-plane-api generated server"
+        );
+        
+        // Return proper gRPC UNIMPLEMENTED status
+        // This allows clients to understand the service exists but method isn't ready
+        Box::pin(async move {
+            let status = tonic::Status::unimplemented(
+                "ADS service requires integration with data-plane-api generated types. \
+                 See xds-server/src/services/ads.rs for migration instructions."
+            );
+            Ok(status.into_http())
+        })
+    }
+}
+
+impl tonic::server::NamedService for AdsServiceServer {
+    const NAME: &'static str = "envoy.service.discovery.v3.AggregatedDiscoveryService";
 }
 
 #[cfg(test)]

@@ -23,6 +23,7 @@ futures = { workspace = true }
 tonic = { workspace = true }
 tonic-health = { workspace = true }
 tonic-reflection = { workspace = true, optional = true }
+http = { workspace = true }
 
 # Protobuf
 prost = { workspace = true }

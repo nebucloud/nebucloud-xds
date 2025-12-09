@@ -47,6 +47,11 @@ impl RdsService {
     pub fn type_url() -> &'static str {
         TypeUrl::ROUTE
     }
+
+    /// Convert this service into a tonic service for use with Server::add_service.
+    pub fn into_service(self) -> RdsServiceServer {
+        RdsServiceServer { inner: self }
+    }
 }
 
 /// Trait for RDS service implementation.
@@ -190,6 +195,53 @@ impl RouteDiscoveryService for RdsService {
             control_plane: None,
         }))
     }
+}
+
+/// Server wrapper for RdsService.
+#[derive(Debug, Clone)]
+pub struct RdsServiceServer {
+    #[allow(dead_code)]
+    inner: RdsService,
+}
+
+impl RdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: RdsService) -> Self {
+        Self { inner: service }
+    }
+}
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for RdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        let path = req.uri().path().to_string();
+        tracing::warn!(
+            path = %path,
+            "RDS service called but proto integration not yet complete"
+        );
+        Box::pin(async move {
+            let status = tonic::Status::unimplemented(
+                "RDS service requires integration with data-plane-api generated types"
+            );
+            Ok(status.into_http())
+        })
+    }
+}
+
+impl tonic::server::NamedService for RdsServiceServer {
+    const NAME: &'static str = "envoy.service.route.v3.RouteDiscoveryService";
 }
 
 #[cfg(test)]

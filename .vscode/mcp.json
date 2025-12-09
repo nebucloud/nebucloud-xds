@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "xds-mcp": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/target/release/xds-mcp",
+      "args": ["--workspace", "${workspaceFolder}"]
+    }
+  }
+}

@@ -47,6 +47,11 @@ impl EdsService {
     pub fn type_url() -> &'static str {
         TypeUrl::ENDPOINT
     }
+
+    /// Convert this service into a tonic service for use with Server::add_service.
+    pub fn into_service(self) -> EdsServiceServer {
+        EdsServiceServer { inner: self }
+    }
 }
 
 /// Trait for EDS service implementation.
@@ -190,6 +195,53 @@ impl EndpointDiscoveryService for EdsService {
             control_plane: None,
         }))
     }
+}
+
+/// Server wrapper for EdsService.
+#[derive(Debug, Clone)]
+pub struct EdsServiceServer {
+    #[allow(dead_code)]
+    inner: EdsService,
+}
+
+impl EdsServiceServer {
+    /// Create a new server wrapper.
+    pub fn new(service: EdsService) -> Self {
+        Self { inner: service }
+    }
+}
+
+impl tonic::codegen::Service<http::Request<tonic::body::BoxBody>> for EdsServiceServer {
+    type Response = http::Response<tonic::body::BoxBody>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+        let path = req.uri().path().to_string();
+        tracing::warn!(
+            path = %path,
+            "EDS service called but proto integration not yet complete"
+        );
+        Box::pin(async move {
+            let status = tonic::Status::unimplemented(
+                "EDS service requires integration with data-plane-api generated types"
+            );
+            Ok(status.into_http())
+        })
+    }
+}
+
+impl tonic::server::NamedService for EdsServiceServer {
+    const NAME: &'static str = "envoy.service.endpoint.v3.EndpointDiscoveryService";
 }
 
 #[cfg(test)]

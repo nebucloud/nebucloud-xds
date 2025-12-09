@@ -19,6 +19,14 @@ pub struct ServerConfig {
     pub max_request_size: usize,
     /// Response compression.
     pub compression: CompressionConfig,
+    /// Grace period for shutdown.
+    pub grace_period: Duration,
+    /// Enable health checking.
+    pub enable_health: bool,
+    /// Enable metrics.
+    pub enable_metrics: bool,
+    /// Enable connection tracking.
+    pub enable_connection_tracking: bool,
 }
 
 impl Default for ServerConfig {
@@ -31,6 +39,10 @@ impl Default for ServerConfig {
             keepalive_timeout: Some(Duration::from_secs(10)),
             max_request_size: 4 * 1024 * 1024, // 4MB
             compression: CompressionConfig::default(),
+            grace_period: Duration::from_secs(30),
+            enable_health: true,
+            enable_metrics: true,
+            enable_connection_tracking: true,
         }
     }
 }
