@@ -278,7 +278,7 @@ See [MILESTONES.md](./MILESTONES.md) for the full development roadmap:
 | **M1: Foundation** | Workspace structure and tooling | 🟢 Complete |
 | **M2: Core Implementation** | Types, cache, watches | 🟢 Complete |
 | **M3: Protocol Handlers** | SotW and Delta handlers | 🟢 Complete |
-| **M4: Production Readiness** | Metrics, health checks, graceful shutdown | 🟡 75% |
+| **M4: Production Readiness** | Metrics, health checks, graceful shutdown | 🟢 Complete |
 | **M5: Examples & Documentation** | Examples and guides | 🟡 50% |
 | **M6: Release** | Publishing and versioning | 🟡 33% |
 

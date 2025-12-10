@@ -39,10 +39,9 @@ tokio-test = { workspace = true }
 pretty_assertions = { workspace = true }
 criterion = { workspace = true }
 
-# Benchmarks disabled until criterion benchmarks are implemented
-# [[bench]]
-# name = "cache_bench"
-# harness = false
+[[bench]]
+name = "cache_benchmarks"
+harness = false
 
 [lints]
 workspace = true
