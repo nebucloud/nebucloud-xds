@@ -1,0 +1,35 @@
+# Docker Compose for Envoy integration tests
+#
+# This sets up an Envoy proxy that connects to a local xDS server.
+# The xDS server is started by the Rust test harness on port 18000.
+#
+# Usage:
+#   docker compose -f tests/envoy/docker-compose.yaml up -d
+#   cargo test --package envoy-tests
+#   docker compose -f tests/envoy/docker-compose.yaml down
+
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.31-latest
+    container_name: envoy-xds-test
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "9901:9901"   # Admin interface
+      - "10000:10000" # Listener port (configured via xDS)
+    # Use host network to connect to localhost xDS server
+    # On Linux: use network_mode: host
+    # On macOS: use host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - envoy
+      - -c
+      - /etc/envoy/envoy.yaml
+      - --log-level
+      - debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9901/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

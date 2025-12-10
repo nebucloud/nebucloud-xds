@@ -1,0 +1,132 @@
+# Envoy Integration Tests
+#
+# Runs integration tests with a real Envoy proxy container.
+# These tests verify xDS protocol compliance.
+
+name: Envoy Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "tests/envoy/**"
+      - ".github/workflows/envoy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "tests/envoy/**"
+      - ".github/workflows/envoy.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  envoy-tests:
+    name: Envoy Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      envoy:
+        image: envoyproxy/envoy:v1.31-latest
+        ports:
+          - 9901:9901
+          - 10000:10000
+        options: >-
+          --health-cmd="curl -f http://localhost:9901/ready || exit 1"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+        volumes:
+          - ${{ github.workspace }}/tests/envoy/envoy-ci.yaml:/etc/envoy/envoy.yaml:ro
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.x"
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "envoy-tests"
+      
+      - name: Create CI Envoy config
+        run: |
+          cat > tests/envoy/envoy-ci.yaml << 'EOF'
+          admin:
+            address:
+              socket_address:
+                address: 0.0.0.0
+                port_value: 9901
+
+          node:
+            id: test-envoy-node
+            cluster: test-cluster
+
+          dynamic_resources:
+            ads_config:
+              api_type: GRPC
+              transport_api_version: V3
+              grpc_services:
+                - envoy_grpc:
+                    cluster_name: xds_cluster
+            cds_config:
+              resource_api_version: V3
+              ads: {}
+            lds_config:
+              resource_api_version: V3
+              ads: {}
+
+          static_resources:
+            clusters:
+              - name: xds_cluster
+                type: STRICT_DNS
+                connect_timeout: 5s
+                typed_extension_protocol_options:
+                  envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+                    "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+                    explicit_http_config:
+                      http2_protocol_options: {}
+                load_assignment:
+                  cluster_name: xds_cluster
+                  endpoints:
+                    - lb_endpoints:
+                        - endpoint:
+                            address:
+                              socket_address:
+                                address: host.docker.internal
+                                port_value: 18000
+          EOF
+      
+      - name: Build tests
+        run: cargo build --package envoy-tests
+      
+      - name: Wait for Envoy
+        run: |
+          echo "Waiting for Envoy to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:9901/ready; then
+              echo "Envoy is ready!"
+              break
+            fi
+            echo "Attempt $i: Envoy not ready yet..."
+            sleep 2
+          done
+      
+      - name: Run Envoy integration tests
+        run: cargo test --package envoy-tests -- --ignored --nocapture
+        env:
+          ENVOY_ADMIN_URL: http://localhost:9901

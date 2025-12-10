@@ -14,7 +14,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 | [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟢 Complete | 100% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🟢 Complete | 100% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🟢 Complete | 100% |
-| [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🟡 In Progress | 50% |
+| [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🟡 In Progress | 57% |
 | [M6: Release](#m6-release) | Week 11-12 | 🟡 In Progress | 33% |
 
 **Legend:** 🔴 Not Started | 🟡 In Progress | 🟢 Complete
@@ -162,7 +162,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 |---|-------|----------|----------|----------|--------|
 | 32 | Create simple-server example | P0 | 4h | - | 🟢 |
 | 33 | Create kubernetes-controller example | P0 | 8h | - | 🟢 |
-| 34 | Write integration tests with Envoy | P0 | 6h | - | 🔴 |
+| 34 | Write integration tests with Envoy | P0 | 6h | - | 🟢 |
 | 35 | Add API documentation (rustdoc) | P0 | 4h | - | 🟢 |
 | 36 | Write getting started guide | P1 | 3h | - | 🔴 |
 | 37 | Add architecture documentation | P1 | 2h | - | 🔴 |
@@ -170,7 +170,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 
 **Exit Criteria:**
 - [x] Examples compile and run
-- [ ] Integration tests passing with real Envoy
+- [x] Integration tests passing with real Envoy
 - [ ] Documentation published to docs.rs
 - [x] README with quickstart
 

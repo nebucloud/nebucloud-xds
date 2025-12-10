@@ -1,0 +1,29 @@
+[package]
+name = "envoy-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Integration tests with real Envoy proxy"
+
+[dependencies]
+nebucloud-xds = { path = "../../crates/nebucloud-xds" }
+xds-core = { path = "../../crates/xds-core" }
+xds-cache = { path = "../../crates/xds-cache" }
+xds-server = { path = "../../crates/xds-server" }
+proto = { path = "../../proto" }
+
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# HTTP client for Envoy admin API
+reqwest = { version = "0.12", features = ["json"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Test utilities
+rstest = { workspace = true }
+pretty_assertions = { workspace = true }

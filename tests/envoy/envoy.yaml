@@ -1,0 +1,57 @@
+# Envoy bootstrap configuration for xDS integration tests
+#
+# This config tells Envoy to:
+# 1. Connect to our xDS control plane at host.docker.internal:18000
+# 2. Use ADS (Aggregated Discovery Service) for all xDS resources
+# 3. Expose an admin interface on port 9901
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+
+node:
+  id: test-envoy-node
+  cluster: test-cluster
+  metadata:
+    role: edge-proxy
+    zone: us-west-2a
+
+# Dynamic resources from xDS
+dynamic_resources:
+  ads_config:
+    api_type: GRPC
+    transport_api_version: V3
+    grpc_services:
+      - envoy_grpc:
+          cluster_name: xds_cluster
+    set_node_on_first_message_only: true
+  cds_config:
+    resource_api_version: V3
+    ads: {}
+  lds_config:
+    resource_api_version: V3
+    ads: {}
+
+# Static cluster for connecting to xDS control plane
+static_resources:
+  clusters:
+    - name: xds_cluster
+      type: STRICT_DNS
+      connect_timeout: 5s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: xds_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      # Connect to xDS server running on the host
+                      address: host.docker.internal
+                      port_value: 18000

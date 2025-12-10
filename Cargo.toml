@@ -19,6 +19,7 @@ members = [
     
     # Integration tests
     "tests/integration",
+    "tests/envoy",
     
     # Proto types (requires protoc)
     "proto",
