@@ -47,6 +47,22 @@ impl CdsService {
         }
     }
 
+    /// Create a new CDS service with a shared SotW handler.
+    ///
+    /// This allows sharing the handler across multiple services for better
+    /// resource efficiency.
+    pub fn new_with_handler(
+        cache: Arc<ShardedCache>,
+        registry: Arc<ResourceRegistry>,
+        sotw_handler: Arc<SotwHandler>,
+    ) -> Self {
+        Self {
+            cache,
+            registry,
+            sotw_handler,
+        }
+    }
+
     /// Get the type URL for clusters.
     #[inline]
     pub fn type_url() -> &'static str {

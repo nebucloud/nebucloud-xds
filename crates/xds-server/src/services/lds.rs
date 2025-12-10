@@ -47,6 +47,22 @@ impl LdsService {
         }
     }
 
+    /// Create a new LDS service with a shared SotW handler.
+    ///
+    /// This allows sharing the handler across multiple services for better
+    /// resource efficiency.
+    pub fn new_with_handler(
+        cache: Arc<ShardedCache>,
+        registry: Arc<ResourceRegistry>,
+        sotw_handler: Arc<SotwHandler>,
+    ) -> Self {
+        Self {
+            cache,
+            registry,
+            sotw_handler,
+        }
+    }
+
     /// Get the type URL for listeners.
     #[inline]
     pub fn type_url() -> &'static str {

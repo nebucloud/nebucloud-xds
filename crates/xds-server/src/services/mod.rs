@@ -67,6 +67,9 @@ impl ServiceState {
     }
 
     /// Create all discovery services from this state.
+    ///
+    /// Services share the SotW handler from this state for better resource
+    /// efficiency instead of creating individual handlers.
     pub fn create_services(
         &self,
     ) -> (
@@ -79,11 +82,31 @@ impl ServiceState {
     ) {
         (
             AdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
-            CdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
-            LdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
-            RdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
-            EdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
-            SdsService::new(Arc::clone(&self.cache), Arc::clone(&self.registry)),
+            CdsService::new_with_handler(
+                Arc::clone(&self.cache),
+                Arc::clone(&self.registry),
+                Arc::clone(&self.sotw),
+            ),
+            LdsService::new_with_handler(
+                Arc::clone(&self.cache),
+                Arc::clone(&self.registry),
+                Arc::clone(&self.sotw),
+            ),
+            RdsService::new_with_handler(
+                Arc::clone(&self.cache),
+                Arc::clone(&self.registry),
+                Arc::clone(&self.sotw),
+            ),
+            EdsService::new_with_handler(
+                Arc::clone(&self.cache),
+                Arc::clone(&self.registry),
+                Arc::clone(&self.sotw),
+            ),
+            SdsService::new_with_handler(
+                Arc::clone(&self.cache),
+                Arc::clone(&self.registry),
+                Arc::clone(&self.sotw),
+            ),
         )
     }
 }
