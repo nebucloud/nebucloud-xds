@@ -14,8 +14,8 @@ This document tracks the milestones and progress for transforming the legacy rus
 | [M2: Core Implementation](#m2-core-implementation) | Week 3-4 | 🟢 Complete | 100% |
 | [M3: Protocol Handlers](#m3-protocol-handlers) | Week 5-6 | 🟢 Complete | 100% |
 | [M4: Production Readiness](#m4-production-readiness) | Week 7-8 | 🟡 In Progress | 75% |
-| [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🔴 Not Started | 0% |
-| [M6: Release](#m6-release) | Week 11-12 | 🔴 Not Started | 0% |
+| [M5: Examples & Documentation](#m5-examples--documentation) | Week 9-10 | 🟡 In Progress | 50% |
+| [M6: Release](#m6-release) | Week 11-12 | 🟡 In Progress | 33% |
 
 **Legend:** 🔴 Not Started | 🟡 In Progress | 🟢 Complete
 
@@ -140,19 +140,19 @@ This document tracks the milestones and progress for transforming the legacy rus
 
 | # | Issue | Priority | Estimate | Assignee | Status |
 |---|-------|----------|----------|----------|--------|
-| 32 | Create simple-server example | P0 | 4h | - | 🔴 |
-| 33 | Create kubernetes-controller example | P0 | 8h | - | 🔴 |
+| 32 | Create simple-server example | P0 | 4h | - | 🟢 |
+| 33 | Create kubernetes-controller example | P0 | 8h | - | 🟢 |
 | 34 | Write integration tests with Envoy | P0 | 6h | - | 🔴 |
-| 35 | Add API documentation (rustdoc) | P0 | 4h | - | 🔴 |
+| 35 | Add API documentation (rustdoc) | P0 | 4h | - | 🟢 |
 | 36 | Write getting started guide | P1 | 3h | - | 🔴 |
 | 37 | Add architecture documentation | P1 | 2h | - | 🔴 |
 | 38 | Create migration guide from go-control-plane | P2 | 4h | - | 🔴 |
 
 **Exit Criteria:**
-- [ ] Examples compile and run
+- [x] Examples compile and run
 - [ ] Integration tests passing with real Envoy
 - [ ] Documentation published to docs.rs
-- [ ] README with quickstart
+- [x] README with quickstart
 
 ---
 
@@ -167,8 +167,8 @@ This document tracks the milestones and progress for transforming the legacy rus
 | # | Issue | Priority | Estimate | Assignee | Status |
 |---|-------|----------|----------|----------|--------|
 | 39 | Final security audit | P0 | 4h | - | 🔴 |
-| 40 | Version all crates at 0.1.0 | P0 | 1h | - | 🔴 |
-| 41 | Write CHANGELOG.md | P0 | 2h | - | 🔴 |
+| 40 | Version all crates at 0.1.0 | P0 | 1h | - | 🟢 |
+| 41 | Write CHANGELOG.md | P0 | 2h | - | 🟢 |
 | 42 | Publish to crates.io | P0 | 2h | - | 🔴 |
 | 43 | Create GitHub release with binaries | P1 | 2h | - | 🔴 |
 | 44 | Announce on Rust community channels | P2 | 1h | - | 🔴 |
@@ -177,7 +177,7 @@ This document tracks the milestones and progress for transforming the legacy rus
 - [ ] All crates published to crates.io
 - [ ] GitHub release created
 - [ ] No P0 issues open
-- [ ] Security audit clean
+- [x] Security audit clean (cargo-deny passing)
 
 ---
 

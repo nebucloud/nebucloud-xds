@@ -61,8 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build a snapshot for a node
     let snapshot = Snapshot::builder()
         .version("v1")
-        .resources(TypeUrl::Cluster, vec![])
-        .resources(TypeUrl::Listener, vec![])
+        .resources(TypeUrl::new(TypeUrl::CLUSTER), vec![])
+        .resources(TypeUrl::new(TypeUrl::LISTENER), vec![])
         .build();
 
     // Set snapshot for a node
@@ -279,8 +279,8 @@ See [MILESTONES.md](./MILESTONES.md) for the full development roadmap:
 | **M2: Core Implementation** | Types, cache, watches | 🟢 Complete |
 | **M3: Protocol Handlers** | SotW and Delta handlers | 🟢 Complete |
 | **M4: Production Readiness** | Metrics, health checks, graceful shutdown | 🟡 75% |
-| **M5: Examples & Documentation** | Examples and guides | 🟡 In Progress |
-| **M6: Release** | Publishing and versioning | 🔴 Not Started |
+| **M5: Examples & Documentation** | Examples and guides | 🟡 50% |
+| **M6: Release** | Publishing and versioning | 🟡 33% |
 
 ## Contributing
 
