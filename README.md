@@ -271,14 +271,16 @@ See `examples/custom-control-plane/` for a complete implementation.
 
 ## Roadmap
 
-See [MILESTONES.md](./MILESTONES.md) for the development roadmap:
+See [MILESTONES.md](./MILESTONES.md) for the full development roadmap:
 
-1. **M1: Foundation** - Workspace structure and tooling 🟡 (25%)
-2. **M2: Core Implementation** - Types, cache, watches 🟡 (75%)
-3. **M3: Protocols** - SotW and Delta handlers 🔴
-4. **M4: Production Readiness** - Metrics, health checks, graceful shutdown 🔴
-5. **M5: Examples & Documentation** - Examples and guides 🔴
-6. **M6: Release** - Publishing and versioning 🔴
+| Milestone | Description | Status |
+|-----------|-------------|--------|
+| **M1: Foundation** | Workspace structure and tooling | 🟢 Complete |
+| **M2: Core Implementation** | Types, cache, watches | 🟢 Complete |
+| **M3: Protocol Handlers** | SotW and Delta handlers | 🟢 Complete |
+| **M4: Production Readiness** | Metrics, health checks, graceful shutdown | 🟡 75% |
+| **M5: Examples & Documentation** | Examples and guides | 🟡 In Progress |
+| **M6: Release** | Publishing and versioning | 🔴 Not Started |
 
 ## Contributing
 

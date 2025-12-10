@@ -236,7 +236,7 @@ mod rand {
         if seed == 0 {
             seed = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time before UNIX_EPOCH")
                 .as_nanos() as u64;
         }
         // Simple LCG

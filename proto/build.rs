@@ -3,8 +3,9 @@ use std::io;
 use std::path::PathBuf;
 
 fn main() -> io::Result<()> {
+    // The data-plane-api submodule contains the Envoy proto definitions
     let protos: Vec<PathBuf> = glob("data-plane-api/envoy/**/v3/*.proto")
-        .unwrap()
+        .expect("Failed to read proto glob pattern")
         .filter_map(Result::ok)
         .collect();
     let mut config = prost_build::Config::new();
@@ -18,7 +19,7 @@ fn main() -> io::Result<()> {
             config,
             &protos,
             &[
-                "data-plane-api",
+                "data-plane-api",  // Envoy data-plane-api submodule
                 "googleapis",
                 "protoc-gen-validate",
                 "xds",

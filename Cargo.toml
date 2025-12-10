@@ -21,7 +21,7 @@ members = [
     "tests/integration",
     
     # Proto types (requires protoc)
-    "data-plane-api",
+    "proto",
 ]
 
 # Exclude legacy crates that need protoc
@@ -49,8 +49,8 @@ xds-cache = { version = "0.1.0", path = "crates/xds-cache" }
 xds-server = { version = "0.1.0", path = "crates/xds-server" }
 nebucloud-xds = { version = "0.1.0", path = "crates/nebucloud-xds" }
 
-# Legacy (during migration)
-data-plane-api = { version = "0.2.0", path = "data-plane-api" }
+# Proto types
+proto = { version = "0.2.0", path = "proto", package = "proto" }
 
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }

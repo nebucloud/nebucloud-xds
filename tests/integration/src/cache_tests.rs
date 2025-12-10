@@ -43,7 +43,7 @@ fn cache_multiple_nodes() {
     // Verify each node has correct version
     for (i, node_id) in nodes.iter().enumerate() {
         let node = NodeHash::from_id(node_id);
-        let snapshot = cache.get_snapshot(node).unwrap();
+        let snapshot = cache.get_snapshot(node).expect("snapshot should exist for node");
         assert_eq!(snapshot.version(), format!("v{}", i + 1));
     }
 }
@@ -97,7 +97,7 @@ async fn cache_watch_notifications() {
     // Watch should receive the snapshot
     let result = tokio::time::timeout(Duration::from_secs(1), watch.recv()).await;
     assert!(result.is_ok());
-    let snapshot = result.unwrap().unwrap();
+    let snapshot = result.expect("watch recv timed out").expect("watch channel closed");
     assert_eq!(snapshot.version(), "v1");
 }
 
@@ -119,8 +119,8 @@ async fn cache_multiple_watches() {
     let r2 = tokio::time::timeout(Duration::from_secs(1), watch2.recv()).await;
 
     assert!(r1.is_ok() && r2.is_ok());
-    assert_eq!(r1.unwrap().unwrap().version(), "v1");
-    assert_eq!(r2.unwrap().unwrap().version(), "v1");
+    assert_eq!(r1.expect("watch1 timed out").expect("watch1 closed").version(), "v1");
+    assert_eq!(r2.expect("watch2 timed out").expect("watch2 closed").version(), "v1");
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn cache_concurrent_access() {
 
     // Wait for all threads
     for handle in handles {
-        handle.join().unwrap();
+        handle.join().expect("thread panicked");
     }
 
     // Cache should have all nodes

@@ -78,7 +78,7 @@ fn snapshot_resources_empty() {
         .resources(TypeUrl::CLUSTER.into(), vec![])
         .build();
 
-    let resources = snapshot.get_resources(TypeUrl::CLUSTER.into()).unwrap();
+    let resources = snapshot.get_resources(TypeUrl::CLUSTER.into()).expect("CLUSTER type should exist");
     assert!(resources.is_empty());
     assert_eq!(resources.len(), 0);
 }

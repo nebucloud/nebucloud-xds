@@ -18,10 +18,10 @@ use crate::sotw::{SotwHandler, SotwResponse};
 use crate::stream::StreamContext;
 
 // Re-export the data-plane-api types for external use
-pub use data_plane_api::envoy::service::discovery::v3::{
+pub use proto::envoy::service::discovery::v3::{
     DeltaDiscoveryRequest, DeltaDiscoveryResponse, DiscoveryRequest, DiscoveryResponse,
 };
-pub use data_plane_api::envoy::service::discovery::v3::aggregated_discovery_service_server::{
+pub use proto::envoy::service::discovery::v3::aggregated_discovery_service_server::{
     AggregatedDiscoveryService, AggregatedDiscoveryServiceServer,
 };
 
@@ -161,7 +161,7 @@ impl AdsService {
     /// Convert internal SotW response to proto DiscoveryResponse.
     #[allow(clippy::result_large_err)]
     fn convert_sotw_response(&self, response: SotwResponse) -> Result<DiscoveryResponse, Status> {
-        use data_plane_api::google::protobuf::Any;
+        use proto::google::protobuf::Any;
 
         let resources: Vec<Any> = response
             .resources

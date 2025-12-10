@@ -200,7 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Load sample data into the dispatch state.
 fn load_sample_data(state: &Arc<RwLock<DispatchState>>) {
-    let mut state = state.write().unwrap();
+    let mut state = state.write().expect("dispatch state lock poisoned");
 
     info!("Loading sample data...");
 
@@ -282,7 +282,7 @@ fn load_sample_data(state: &Arc<RwLock<DispatchState>>) {
 
 /// Refresh all snapshots from current domain state.
 fn refresh_snapshots(state: &Arc<RwLock<DispatchState>>, cache: &ShardedCache) {
-    let state = state.read().unwrap();
+    let state = state.read().expect("dispatch state lock poisoned");
 
     // Snapshot for dispatcher nodes (full view)
     let dispatcher_snapshot = state.build_dispatcher_snapshot();

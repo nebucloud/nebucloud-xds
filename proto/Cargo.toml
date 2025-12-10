@@ -1,5 +1,5 @@
 [package]
-name = "data-plane-api"
+name = "proto"
 version = "0.2.0"
 edition = "2021"
 

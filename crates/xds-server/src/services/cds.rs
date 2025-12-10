@@ -17,11 +17,11 @@ use crate::sotw::SotwHandler;
 use crate::stream::StreamContext;
 
 // Re-export the data-plane-api types
-pub use data_plane_api::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
-pub use data_plane_api::envoy::service::cluster::v3::cluster_discovery_service_server::{
+pub use proto::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
+pub use proto::envoy::service::cluster::v3::cluster_discovery_service_server::{
     ClusterDiscoveryService, ClusterDiscoveryServiceServer,
 };
-pub use data_plane_api::envoy::service::discovery::v3::{
+pub use proto::envoy::service::discovery::v3::{
     DeltaDiscoveryRequest, DeltaDiscoveryResponse,
 };
 
@@ -94,7 +94,7 @@ impl CdsService {
         &self,
         response: crate::sotw::SotwResponse,
     ) -> Result<DiscoveryResponse, Status> {
-        use data_plane_api::google::protobuf::Any;
+        use proto::google::protobuf::Any;
 
         let resources: Vec<Any> = response
             .resources

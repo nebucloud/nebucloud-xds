@@ -15,7 +15,7 @@ use xds_core::{NodeHash, TypeUrl};
 use crate::sotw::{SotwHandler, SotwResponse};
 use crate::stream::StreamContext;
 
-pub use data_plane_api::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
+pub use proto::envoy::service::discovery::v3::{DiscoveryRequest, DiscoveryResponse};
 
 /// Configuration for a discovery stream.
 #[derive(Debug, Clone, Copy)]
@@ -206,7 +206,7 @@ pub fn convert_sotw_response(
     response: SotwResponse,
     type_url: &str,
 ) -> Result<DiscoveryResponse, Status> {
-    use data_plane_api::google::protobuf::Any;
+    use proto::google::protobuf::Any;
 
     let resources: Vec<Any> = response
         .resources
