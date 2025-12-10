@@ -24,8 +24,9 @@ nebucloud-xds/
 │   ├── xds-types/      # Generated protobuf types
 │   └── nebucloud-xds/  # Facade crate (re-exports all)
 ├── examples/
-│   ├── simple-server/
-│   └── kubernetes-controller/
+│   ├── simple-server/          # Basic xDS server
+│   ├── kubernetes-controller/  # K8s-native control plane
+│   └── custom-control-plane/   # Domain-specific control plane
 └── tests/
     └── integration/
 ```
@@ -197,6 +198,76 @@ A Kubernetes-native control plane scaffold:
 - Simulated Kubernetes watch events
 - Service/Endpoint to xDS translation
 - Multi-node type support
+
+### custom-control-plane
+
+A **domain-specific control plane** showing how external consumers can use this library:
+- Business domain types (Load, Vehicle, Assignment)
+- Domain → xDS resource conversion patterns
+- Snapshot building from domain state
+- Multi-node-type support (dispatcher, vehicles, depots)
+
+This example demonstrates the pattern for building custom control planes for use cases like:
+- Logistics/trucking dispatch
+- IoT device management
+- Gaming server orchestration
+- Any domain that benefits from dynamic configuration distribution
+
+## Building Custom Control Planes
+
+This library is designed to be used as a foundation for building domain-specific control planes. The key pattern is:
+
+1. **Define domain types** - Your business objects without xDS dependencies
+2. **Create resource wrappers** - Implement the `Resource` trait for xDS types
+3. **Build conversion layer** - Transform domain objects to xDS resources
+4. **Manage snapshots** - Build and push snapshots on domain changes
+
+```rust
+use nebucloud_xds::prelude::*;
+use std::sync::Arc;
+
+// 1. Define your domain type
+struct Vehicle {
+    id: String,
+    location: (f64, f64),
+    capacity: u32,
+}
+
+// 2. Create a resource wrapper
+#[derive(Debug)]
+struct VehicleEndpoint {
+    cluster_name: String,
+    vehicles: Vec<Vehicle>,
+}
+
+impl Resource for VehicleEndpoint {
+    fn type_url(&self) -> &str { TypeUrl::ENDPOINT }
+    fn name(&self) -> &str { &self.cluster_name }
+    fn encode(&self) -> Result<prost_types::Any, _> { /* encode */ }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+}
+
+// 3. Build snapshots from your domain
+fn build_snapshot(vehicles: &[Vehicle]) -> Snapshot {
+    let endpoint = Arc::new(VehicleEndpoint {
+        cluster_name: "fleet".into(),
+        vehicles: vehicles.to_vec(),
+    });
+    
+    Snapshot::builder()
+        .version("v1")
+        .resources(TypeUrl::new(TypeUrl::ENDPOINT), vec![endpoint])
+        .build()
+}
+
+// 4. Push to cache (Envoy clients get notified automatically)
+fn update_fleet(cache: &ShardedCache, vehicles: &[Vehicle]) {
+    let snapshot = build_snapshot(vehicles);
+    cache.set_snapshot(NodeHash::from_id("fleet-node"), snapshot);
+}
+```
+
+See `examples/custom-control-plane/` for a complete implementation.
 
 ## Roadmap
 
