@@ -24,12 +24,6 @@ members = [
     "proto",
 ]
 
-# Exclude legacy crates that need protoc
-exclude = [
-    "rust-control-plane",
-    "test-xds",
-]
-
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
