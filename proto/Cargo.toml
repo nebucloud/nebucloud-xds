@@ -2,6 +2,8 @@
 name = "proto"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Generated protobuf types for Envoy xDS APIs"
 
 [dependencies]
 prost = "0.13.3"
