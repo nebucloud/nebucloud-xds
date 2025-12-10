@@ -12,6 +12,7 @@ members = [
     # Examples
     "examples/simple-server",
     "examples/kubernetes-controller",
+    "examples/custom-control-plane",
     
     # Tools
     "tools/xds-mcp",
