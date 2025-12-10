@@ -44,7 +44,7 @@ xds-server = { version = "0.1.0", path = "crates/xds-server" }
 nebucloud-xds = { version = "0.1.0", path = "crates/nebucloud-xds" }
 
 # Proto types
-proto = { version = "0.2.0", path = "proto", package = "proto" }
+proto = { version = "0.1.0", path = "proto", package = "proto" }
 
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }
